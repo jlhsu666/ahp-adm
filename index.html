@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AHP 問卷與分析系統（GitHub 部署版）</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header><div class="wrap">
+<div><h1 id="siteTitle">AHP 問卷與分析系統</h1><p id="siteSubtitle">層級分析法 · 填答、存檔、後台分析</p></div>
+<nav>
+<button data-view="fill" class="active">填答問卷</button>
+<button data-view="admin">管理後台</button>
+<button data-view="deploy">部署說明</button>
+</nav>
+</div></header>
+
+<main>
+<!-- ================= 填答 ================= -->
+<section id="view-fill">
+<div class="card" id="fillIntro"></div>
+<div class="card">
+<h2>第一步：基本資料（匿名，僅供分組分析）</h2>
+<div class="grid">
+<div><label for="fCode">填答編號（可自填，例如 T01；留空由系統編號）</label><input id="fCode" type="text" placeholder="例如 T01"></div>
+<div><label id="fGroupLabel" for="fGroup">分組</label><select id="fGroup"></select></div>
+</div>
+<div class="grid" id="fBackground"></div>
+<p class="muted small">提醒：請勿填寫姓名、電話、電子郵件等可識別個人的資料。本問卷只記錄上面這些分組欄位與成對比較值。</p>
+</div>
+
+<div class="card">
+<h2>第二步：成對比較（Saaty 1–9 量尺）</h2>
+<p class="muted">每一題請選出左、右兩項的相對重要程度：1＝同等重要，3＝稍微重要，5＝頗為重要，7＝極度重要，9＝絕對重要；2、4、6、8 為中間值。系統會自動取倒數，不用兩邊都填。</p>
+<div class="progress"><i id="fillProgress" style="width:0%"></i></div>
+<p class="small muted" id="fillProgressText"></p>
+<div id="fillMatrices"></div>
+</div>
+
+<div class="card">
+<h2>第三步：我的個人結果預覽</h2>
+<p class="muted">先看自己的權重與一致性，確認無誤再送出。C.R. ≦ 0.1 才算通過；未通過仍可送出，但後台分析預設只納入有效問卷（與論文第四章相同）。</p>
+<button id="btnPreview">計算我的個人結果</button>
+<div id="fillPreview"></div>
+<button id="btnSubmit" disabled>送出並存檔</button>
+<span id="submitStatus" class="small muted"></span>
+<div id="fillDone"></div>
+</div>
+</section>
+
+<!-- ================= 後台 ================= -->
+<section id="view-admin" hidden>
+<div class="card" id="adminLock">
+<h2>管理後台</h2>
+<p class="muted">請輸入研究者在 config.js 設定的後台密碼。這個密碼只是簡易門檻，不是真正的帳號驗證；請勿用它保護高度敏感資料，重要研究請把 repo 設為私人、並用匿名編號填答。</p>
+<label for="adminCodeInput">後台密碼</label><input id="adminCodeInput" type="password" autocomplete="off">
+<button id="btnAdminUnlock">進入後台</button>
+<p id="adminLockMsg" class="small bad"></p>
+<div id="adminWarn"></div>
+</div>
+
+<div id="adminBody" hidden>
+<div class="card">
+<h2>資料來源</h2>
+<div class="tabs" role="tablist">
+<button data-src="local" class="active">本機紀錄</button>
+<button data-src="sheet">Google Sheets</button>
+<button data-src="import">匯入檔案</button>
+</div>
+<p class="muted small" id="srcHint"></p>
+<div id="srcControls"></div>
+<button id="btnLoadDemo" class="secondary">載入示範資料（8 筆合成資料，非真實問卷，僅供測試報告格式）</button>
+<button id="btnClearLocal" class="secondary danger">清除本機紀錄</button>
+</div>
+
+<div class="card">
+<div class="tabs">
+<button data-atab="records" class="active">填答紀錄</button>
+<button data-atab="report">分析報告（第四章格式）</button>
+<button data-atab="settings">研究設定</button>
+</div>
+
+<div id="atab-records">
+<p class="muted small">點「查看」可看該筆的 5 張矩陣、權重、C.I.／C.R.。下載的 raw data 包含原始成對比較值，可直接進 Excel、SPSS 或 R 再分析。</p>
+<label>篩選</label>
+<div class="grid">
+<div><select id="recGroupFilter"></select></div>
+<div><select id="recValidFilter"><option value="all">全部問卷</option><option value="valid">只看有效（C.R. ≦ 0.1）</option><option value="invalid">只看無效</option></select></div>
+<div><input id="recSearch" type="text" placeholder="搜尋編號"></div>
+</div>
+<div id="recSummary" class="small muted"></div>
+<div id="recTable"></div>
+<div id="recDetail"></div>
+<h3>下載 Raw Data</h3>
+<button id="btnCsvRaw">下載原始填答 CSV</button>
+<button id="btnCsvWeights">下載個人權重 CSV</button>
+<button id="btnJson">下載完整 JSON</button>
+</div>
+
+<div id="atab-report" hidden>
+<label for="issuedCount">發放份數（可不填；填了才計算回收率，線上問卷通常留空）</label>
+<input id="issuedCount" type="number" min="0" placeholder="例如 30">
+<label><input id="onlyValid" type="checkbox" checked> 分析只納入有效問卷（C.R. ≦ 0.1，論文第四章做法）</label>
+<div><button id="btnGenReport">產生分析報告</button><button id="btnPrintReport" class="secondary">列印／存成 PDF</button><button id="btnDownloadReport" class="secondary">下載報告 HTML</button></div>
+<div id="reportArea"></div>
+</div>
+
+<div id="atab-settings" hidden>
+<p class="muted">這裡改的是「本機測試用」設定，不會自動改到 GitHub 上的 config.js。要正式更換研究架構，請按「下載新的 config.js」，覆蓋 repo 裡的 config.js 後重新部署。</p>
+<div id="settingsEditor"></div>
+<button id="btnLoadGeneric">載入通用範本（4 構面 × 4 指標）</button>
+<button id="btnLoadThesis">載入論文範本（特教資訊融入教學）</button>
+<button id="btnSaveSettingsLocal" class="secondary">只存到本機測試</button>
+<button id="btnDownloadConfig">下載新的 config.js</button>
+<div id="settingsMsg" class="small muted"></div>
+</div>
+</div>
+</div>
+</section>
+
+<!-- ================= 部署 ================= -->
+<section id="view-deploy" hidden>
+<div class="card">
+<h2>部署說明（摘要，完整版見 README.md）</h2>
+<ol>
+<li><b>上 GitHub：</b>把這個資料夾推到一個 repo，Settings → Pages → Branch 選 main、資料夾選 /(root)，存檔後等幾分鐘就有公開網址。</li>
+<li><b>建 Sheet：</b>在 Google Drive 新建試算表，副檔名不用管，開啟「擴充功能 → Apps Script」，把 <code>apps-script/Code.gs</code> 整份貼上並存檔。</li>
+<li><b>部署 Apps Script：</b>右上「部署 → 新增部署 → 網頁應用程式」，執行身分選「我」，存取權選「任何人」，複製網址。</li>
+<li><b>接回網站：</b>把網址貼到 <code>config.js</code> 的 <code>appsScriptUrl</code>，把 <code>adminCode</code> 改成自己的密碼，重新推上 GitHub 即完成。</li>
+<li><b>沒有 Sheet 也能先跑：</b>網址留空就是本機模式，填答存在填答者瀏覽器；研究者再到後台「匯入檔案」或請填答者把個人 JSON 寄回彙整。正式收案請務必先接好 Sheet 再發連結。</li>
+</ol>
+<p class="warn"><b>安全提醒：</b>後台密碼寫在 config.js 裡，懂程式的人看得到原始碼，所以它只是防誤觸的門檻。請一律匿名填答、不要收姓名電話；需要刪除 Sheet 資料時，須另外在 Apps Script 指令碼屬性設定與後台密碼同值的 ADMIN_CODE，否則刪除會被拒絕。</p>
+<h3>Sheet 會長什麼樣子？</h3>
+<ul>
+<li><b>填答原始資料：</b>一列一筆，含編號、時間、分組、背景、30 組成對比較原始值，最後一欄 <code>comparisons_json</code> 是完整比較值 JSON（供後台從 Sheet 讀回重算）。</li>
+<li><b>個人權重結果：</b>一列一筆，含主構面權重、各構面區域權重、全域權重、C.I.／C.R. 與是否有效，方便直接貼進論文表格。</li>
+</ul>
+</div>
+</section>
+</main>
+<footer>計算方法：主特徵向量法，λmax、C.I.＝(λmax−n)/(n−1)、C.R.＝C.I.／R.I.，R.I. 採 Saaty 表（n=4 為 0.90）；多人彙總採論文第四章做法：先算個人權重再取算術平均，全域權重＝主構面平均 × 區域平均。</footer>
+<script src="config.js"></script>
+<script src="assets/ahp.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
