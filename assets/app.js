@@ -62,13 +62,73 @@
     var f = (cfg && cfg.features) || {};
     return { dependency: !!f.dependency, scoring: !!f.scoring };
   }
-  function depScaleOptions() {
-    var opts = '<option value="">請選擇</option>';
-    var labels = { 9: '絕對強', 7: '極強', 5: '頗強', 3: '稍強', 1: '影響相等' };
-    for (var k = 9; k >= 3; k -= 2) opts += '<option value="' + k + '">左方影響較強（' + k + '）</option>';
-    opts += '<option value="1">影響相等（1）</option>';
-    for (var k2 = 3; k2 <= 9; k2 += 2) opts += '<option value="' + (-k2) + '">右方影響較強（' + k2 + '）</option>';
-    return opts;
+  // 形式四：大按鈕步進滑桿。滑桿本身是「位置序號」，對照表才是真正的滑桿值 v：
+  // 第一階段 v ∈ [-9..-2, 0, 2..9]（±1 不存在，因為 1 就是同等重要；2、4、6、8 為中間值）；
+  // 相依階段 v ∈ [-9,-7,-5,-3, 0, 3,5,7,9]（不使用中間值）。
+  // v = 0 為同等／影響相等；v < 0 為左方較重要／影響較強；v > 0 為右方。
+  // 送出的選單值（與舊版選單、矩陣計算相容）：v = 0 時為 1，否則為 -v。
+  var SLIDER_VALUES_MAIN = [-9, -8, -7, -6, -5, -4, -3, -2, 0, 2, 3, 4, 5, 6, 7, 8, 9];
+  var SLIDER_VALUES_DEP = [-9, -7, -5, -3, 0, 3, 5, 7, 9];
+  function sliderWord(a, isDep) {
+    if (a === 3) return isDep ? '稍強' : '稍重要';
+    if (a === 5) return isDep ? '頗強' : '頗重要';
+    if (a === 7) return isDep ? '極強' : '極重要';
+    if (a === 9) return isDep ? '絕對強' : '絕對重要';
+    return '介於 ' + (a - 1) + ' 與 ' + (a + 1) + ' 之間';
+  }
+  function sliderLabel(v, isDep) {
+    if (v === 0) return isDep ? '影響相等（1）' : '同等重要（1）';
+    var a = Math.abs(v), w = sliderWord(a, isDep);
+    if (v < 0) return isDep ? '左方影響較強（' + a + '，' + w + '）' : '左方較重要（' + a + '，' + w + '）';
+    return isDep ? '右方影響較強（' + a + '，' + w + '）' : '右方較重要（' + a + '，' + w + '）';
+  }
+  function sliderSiteValue(v) { return v === 0 ? 1 : -v; }
+  function sliderValueOf(el) {
+    var vals = (el.getAttribute('data-values') || '').split(',').map(function (x) { return parseInt(x, 10); });
+    return vals[parseInt(el.value, 10)];
+  }
+  function sliderHTML(cls, attrs, values, isDep, scaleHint) {
+    var mid = values.indexOf(0);
+    return '<div class="slider-row"><button type="button" class="slider-btn" data-step="-1" aria-label="往左一格">−</button>'
+      + '<input type="range" class="' + cls + '" ' + attrs + ' min="0" max="' + (values.length - 1) + '" step="1" value="' + mid + '" data-answered="0" data-values="' + values.join(',') + '">'
+      + '<button type="button" class="slider-btn" data-step="1" aria-label="往右一格">＋</button></div>'
+      + '<div class="slider-big">尚未選擇，請拖動滑桿或按加減</div>'
+      + '<div class="scale">' + scaleHint + '</div>';
+  }
+  function refreshSlider(el) {
+    var pair = el.closest ? el.closest('.pair') : null;
+    var big = pair ? pair.querySelector('.slider-big') : null;
+    var isDep = el.classList.contains('dep-select');
+    if (big) big.textContent = sliderLabel(sliderValueOf(el), isDep);
+  }
+  function initSliders() {
+    document.querySelectorAll('input.pair-select, input.dep-select').forEach(function (el) {
+      if (el.getAttribute('data-slider-init') === '1') return;
+      el.setAttribute('data-slider-init', '1');
+      el.addEventListener('input', function () {
+        el.setAttribute('data-answered', '1');
+        refreshSlider(el);
+        updateProgress();
+        var depText = $('depProgressText');
+        if (depText) {
+          var sels = document.querySelectorAll('.dep-select'), done = 0;
+          sels.forEach(function (s) { if (s.getAttribute('data-answered') === '1') done++; });
+          depText.textContent = '相依比較已完成 ' + done + ' / ' + sels.length + ' 題';
+        }
+      });
+    });
+    document.querySelectorAll('.slider-btn').forEach(function (btn) {
+      if (btn.getAttribute('data-slider-init') === '1') return;
+      btn.setAttribute('data-slider-init', '1');
+      btn.addEventListener('click', function () {
+        var pair = btn.closest ? btn.closest('.pair') : null;
+        var el = pair ? pair.querySelector('input[type="range"]') : null;
+        if (!el) return;
+        var step = parseInt(btn.getAttribute('data-step'), 10);
+        el.value = Math.max(parseInt(el.min, 10), Math.min(parseInt(el.max, 10), parseInt(el.value, 10) + step));
+        el.dispatchEvent(new Event('input'));
+      });
+    });
   }
   function selectedSchemes(cfg) {
     var checks = document.querySelectorAll('.scheme-check:checked');
@@ -92,14 +152,6 @@
   }
   function structureOf(cfg) { return { dimensions: clone(cfg.dimensions) }; }
   function pairs(n) { var out = []; for (var i = 0; i < n; i++) for (var j = i + 1; j < n; j++) out.push([i, j]); return out; }
-  function scaleOptions() {
-    var opts = '<option value="">請選擇</option>';
-    var labels = { 9: '絕對重要', 7: '極度重要', 5: '頗為重要', 3: '稍微重要', 1: '同等重要' };
-    for (var k = 9; k >= 2; k--) opts += '<option value="' + k + '">左方' + (labels[k] || '重要') + '（' + k + '）</option>';
-    opts += '<option value="1">同等重要（1）</option>';
-    for (var k2 = 2; k2 <= 9; k2++) opts += '<option value="' + (-k2) + '">右方' + (labels[k2] || '重要') + '（' + k2 + '）</option>';
-    return opts;
-  }
 
   // ---------- 填答 ----------
   var lastPreview = null, lastRecord = null;
@@ -130,15 +182,14 @@
         var d0 = (descs || [])[p[0]] || '', d1 = (descs || [])[p[1]] || '';
         var descHtml = (d0 || d1) ? '<div class="small muted">左：' + esc(d0 || '（無定義）') + '<br>右：' + esc(d1 || '（無定義）') + '</div>' : '';
         h += '<div class="pair"><div class="names"><span>' + esc(names[p[0]]) + '</span><span>' + esc(names[p[1]]) + '</span></div>' + descHtml
-          + '<select class="pair-select" data-matrix="' + key + '" data-pair="' + p[0] + '-' + p[1] + '">' + scaleOptions() + '</select>'
-          + '<div class="scale">左方 9 … 1 同等 … 右方 9（選「左方」表示左項較重要，選「右方」表示右項較重要）</div></div>';
+          + sliderHTML('pair-select', 'data-matrix="' + key + '" data-pair="' + p[0] + '-' + p[1] + '"', SLIDER_VALUES_MAIN, false, '左方 9 … 1 同等 … 右方 9（滑桿偏左表示左項較重要，偏右表示右項較重要；中央為同等重要）') + '</div>';
       });
       return h;
     }
     html += matrixBlock('main', '主構面成對比較', dims.map(function (d) { return d.name; }), dims.map(function (d) { return dimDesc(d); }), '');
     dims.forEach(function (d, di) { html += matrixBlock('sub' + di, d.name + '之下子構面成對比較', d.items, d.itemDescs || [], dimDesc(d)); });
     $('fillMatrices').innerHTML = html;
-    document.querySelectorAll('.pair-select').forEach(function (el) { el.addEventListener('change', updateProgress); });
+    initSliders();
     updateProgress();
     // 第二階段：相依比較（僅本研究開啟相依修正時顯示；量尺只用 1、3、5、7、9，不用中間值）
     var depCard = $('fillDependencyCard'), depDiv = $('fillDependency');
@@ -146,7 +197,7 @@
       var feats = featuresOf(cfg), deps = cfg.dependencies || [];
       if (feats.dependency && deps.length) {
         depCard.hidden = false;
-        var dh = '<p class="muted">以下為第二階段：因子間的相依（影響力）比較。每一題請以「基準因子」為對象，判斷左、右兩項對它的影響哪個較大：選「左方影響較強」表示左項影響較大，選「右方影響較強」表示右項影響較大，1 表示影響相等。本階段不使用 2、4、6、8 中間值（論文第二階段做法）。</p><p class="small muted" id="depProgressText"></p>';
+        var dh = '<p class="muted">以下為第二階段：因子間的相依（影響力）比較。每一題請以「基準因子」為對象，判斷左、右兩項對它的影響哪個較大：滑桿偏左表示左項影響較強，偏右表示右項影響較強，中央表示影響相等。本階段不使用 2、4、6、8 中間值（論文第二階段做法）。</p><p class="small muted" id="depProgressText"></p>';
         deps.forEach(function (entry, ei) {
           var dim = dims[entry.dimensionIndex];
           if (!dim) return;
@@ -155,18 +206,13 @@
           dh += '<h3>' + esc(dim.name) + ' — 以「' + esc(baseName) + '」為基準</h3>';
           pairs(names.length).forEach(function (p) {
             dh += '<div class="pair"><div class="names"><span>' + esc(names[p[0]]) + '</span><span>' + esc(names[p[1]]) + '</span></div>'
-              + '<select class="dep-select" data-dep="' + ei + '" data-pair="' + p[0] + '-' + p[1] + '">' + depScaleOptions() + '</select>'
-              + '<div class="scale">左方影響較強 9 … 1 影響相等 … 右方影響較強 9（不使用中間值）</div></div>';
+              + sliderHTML('dep-select', 'data-dep="' + ei + '" data-pair="' + p[0] + '-' + p[1] + '"', SLIDER_VALUES_DEP, true, '左方影響較強 9 … 1 影響相等 … 右方影響較強 9（不使用中間值）') + '</div>';
           });
         });
         depDiv.innerHTML = dh;
-        var updateDepProgress = function () {
-          var sels = document.querySelectorAll('.dep-select'), done = 0;
-          sels.forEach(function (el) { if (el.value) done++; });
-          var el = $('depProgressText'); if (el) el.textContent = '相依比較已完成 ' + done + ' / ' + sels.length + ' 題';
-        };
-        document.querySelectorAll('.dep-select').forEach(function (el) { el.addEventListener('change', updateDepProgress); });
-        updateDepProgress();
+        initSliders();
+        var depText0 = $('depProgressText');
+        if (depText0) depText0.textContent = '相依比較已完成 0 / ' + document.querySelectorAll('.dep-select').length + ' 題';
       } else {
         depCard.hidden = true; depDiv.innerHTML = '';
       }
@@ -177,9 +223,9 @@
     var missing = 0;
     document.querySelectorAll('.pair-select').forEach(function (el) {
       var key = el.getAttribute('data-matrix'), pair = el.getAttribute('data-pair');
-      if (!el.value) { missing++; return; }
+      if (el.getAttribute('data-answered') !== '1') { missing++; return; }
       if (!comps[key]) comps[key] = {};
-      comps[key][pair] = parseInt(el.value, 10);
+      comps[key][pair] = sliderSiteValue(sliderValueOf(el));
     });
     return { comps: comps, missing: missing };
   }
@@ -187,15 +233,15 @@
     var comps = {}, missing = 0;
     document.querySelectorAll('.dep-select').forEach(function (el) {
       var key = 'dep' + el.getAttribute('data-dep'), pair = el.getAttribute('data-pair');
-      if (!el.value) { missing++; return; }
+      if (el.getAttribute('data-answered') !== '1') { missing++; return; }
       if (!comps[key]) comps[key] = {};
-      comps[key][pair] = parseInt(el.value, 10);
+      comps[key][pair] = sliderSiteValue(sliderValueOf(el));
     });
     return { comps: comps, missing: missing };
   }
   function updateProgress() {
     var sels = document.querySelectorAll('.pair-select');
-    var done = 0; sels.forEach(function (el) { if (el.value) done++; });
+    var done = 0; sels.forEach(function (el) { if (el.getAttribute('data-answered') === '1') done++; });
     var pct = sels.length ? Math.round(done / sels.length * 100) : 0;
     $('fillProgress').style.width = pct + '%';
     $('fillProgressText').textContent = '已完成 ' + done + ' / ' + sels.length + ' 題（' + pct + '%）';
