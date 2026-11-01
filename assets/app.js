@@ -877,6 +877,148 @@
     download('ahp_analysis_report.html', doc, 'text/html;charset=utf-8');
   });
 
+  // ---------- Word 報告下載（第四章格式） ----------
+  // 格式規範取自 HiTeach 論文第四章「研究對象與結果分析」：
+  // 章標題置中、節標題置中、內文標楷體 12pt 行距 1.5 倍首行縮排 2 字；
+  // 表題在表上方（「表 N＋表名」，編號全文件連續），表下方加「資料來源：本研究問卷分析結果。」；
+  // 逐人權重表含平均與排行兩列、全域表含區域權重／全域權重／排序，權重皆取小數第三位；
+  // 長條圖不進 Word（Word 版以各表之權重與排序呈現全部數據，圖表請見網站報告）。
+  function chineseNumeral(n) {
+    var digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+    if (n === 10) return '十';
+    if (n < 10) return digits[n];
+    if (n < 20) return '十' + digits[n - 10];
+    var t = Math.floor(n / 10), o = n % 10;
+    return digits[t] + '十' + (o ? digits[o] : '');
+  }
+  function wordCleanText(node) { return (node.textContent || '').replace(/\s+/g, ' ').trim(); }
+  function buildWordReport() {
+    var D = window.DocxBuilder;
+    if (!D) throw new Error('DocxBuilder 未載入');
+    var area = $('reportArea');
+    if (!area || !area.innerHTML) throw new Error('請先產生分析報告');
+    var printArea = area.querySelector('#reportPrintArea') || area;
+    var clone = printArea.cloneNode(true);
+    // 研究者解讀以現場輸入值為準（cloneNode 不一定帶走輸入值，故以現場 textarea 對位取值）
+    var liveTAs = printArea.querySelectorAll('textarea');
+    clone.querySelectorAll('textarea').forEach(function (ta, i) {
+      var live = liveTAs[i];
+      if (live && live.value) {
+        var p = document.createElement('p');
+        p.textContent = '研究者解讀：' + live.value;
+        ta.parentNode.replaceChild(p, ta);
+      } else if (ta.parentNode) {
+        ta.parentNode.removeChild(ta);
+      }
+    });
+    var blocks = [];
+    var cfg = activeConfig();
+    blocks.push(D.heading1('第四章 研究結果與分析'));
+    blocks.push(D.para(cfg.studyTitle || 'AHP 問卷與分析系統', { size: 28, bold: true, align: 'center', spaceBefore: 0, spaceAfter: 120 }));
+    var methodEl = clone.querySelector('p.small.muted');
+    var methodText = methodEl ? wordCleanText(methodEl) : '計算方法：主特徵向量法；C.I.＝(λmax−n)/(n−1)，C.R.＝C.I.／R.I.，C.R. ≦ 0.1 為有效。';
+    blocks.push(D.bodyPara(methodText));
+    var sectionTitles = [];
+    clone.querySelectorAll('h3').forEach(function (h) {
+      var m = wordCleanText(h).match(/^第(\d+)節\s*(.*)$/);
+      if (m) sectionTitles.push(chineseNumeral(parseInt(m[1], 10)) + '節' + m[2]);
+    });
+    if (sectionTitles.length) blocks.push(D.bodyPara('本章分為以下幾節說明：' + sectionTitles.map(function (t, i) { return '第' + chineseNumeral(i + 1) + '節為' + t.replace(/^[一二三四五六七八九十]+節/, ''); }).join('；') + '。'));
+    var tableNo = 0, currentSection = '', currentGroup = '全體', lastH3 = '', lastH4 = '', lastH5 = '', seenMethod = false;
+    function groupFromSection(title) {
+      return title.replace(/^第\d+節\s*/, '').replace(/問卷結果$/, '') || '全體';
+    }
+    function captionFor(tbl) {
+      var headerCount = tbl.querySelectorAll('tr')[0] ? tbl.querySelectorAll('tr')[0].querySelectorAll('th,td').length : 0;
+      var rowCount = tbl.querySelectorAll('tr').length - 1;
+      var hasCRH = false;
+      if (tbl.querySelectorAll('tr')[0]) tbl.querySelectorAll('tr')[0].querySelectorAll('th,td').forEach(function (c) { if (wordCleanText(c).indexOf('C.R.H.') >= 0) hasCRH = true; });
+      if (currentSection === '附錄') return '構面與指標定義';
+      if (lastH3 === '樣本總覽') return '基本資料分析表';
+      if (lastH4 === '無效問卷清單') return '無效問卷清單';
+      if (lastH4.indexOf('分組與背景分布') >= 0) return '分組與背景分布';
+      if (lastH4.indexOf('之下子構面') >= 0) {
+        var dim = lastH4.replace('之下子構面', '');
+        return dim + '之下' + (headerCount - 3) + '個子構面分析結果—' + currentGroup;
+      }
+      if (lastH4.indexOf('全域權重與排行') >= 0) return rowCount + '項構面分析結果—' + currentGroup;
+      if (lastH4.indexOf('相依前後') >= 0) return '相依前後全域權重比較';
+      if (lastH4.indexOf('相依修正後子構面') >= 0) return (lastH5 ? lastH5 + '相依修正後區域權重平均' : '相依修正後子構面平均');
+      if (currentSection.indexOf('相依修正') >= 0 && !lastH4) return '相依修正有效性檢驗';
+      if (currentSection.indexOf('評分') >= 0) return '方案／客戶評分結果';
+      if (currentSection.indexOf('各分組結果比對') >= 0) return '各分組全域權重比對';
+      if (!lastH4 && !lastH5 && currentSection) return (headerCount - 3 - (hasCRH ? 1 : 0)) + '大主構面之分析結果—' + currentGroup;
+      if (lastH4) return lastH4;
+      return currentSection || '分析結果';
+    }
+    function tableBlock(tbl) {
+      var rows = [];
+      tbl.querySelectorAll('tr').forEach(function (tr) {
+        var cells = [];
+        tr.querySelectorAll('th,td').forEach(function (cell) {
+          cells.push({ t: wordCleanText(cell), bold: cell.tagName.toLowerCase() === 'th', align: cell.classList.contains('num') ? 'right' : 'left' });
+        });
+        if (cells.length) rows.push(cells);
+      });
+      if (!rows.length) return '';
+      return D.table(rows[0], rows.slice(1));
+    }
+    function walk(node) {
+      node.childNodes.forEach(function (child) {
+        if (child.nodeType !== 1) return;
+        var tag = child.tagName.toLowerCase();
+        if (child.classList && (child.classList.contains('bar-row') || child.classList.contains('bar-track'))) return;
+        if (tag === 'h2') return;
+        if (tag === 'h3') {
+          var txt = wordCleanText(child);
+          var m = txt.match(/^第(\d+)節\s*(.*)$/);
+          if (txt.indexOf('附錄') === 0) { currentSection = '附錄'; lastH3 = ''; lastH4 = ''; lastH5 = ''; blocks.push(D.heading2(txt)); return; }
+          if (m) { currentSection = txt; currentGroup = groupFromSection(txt); lastH3 = ''; lastH4 = ''; lastH5 = ''; blocks.push(D.heading2(chineseNumeral(parseInt(m[1], 10)) + '節 ' + m[2])); return; }
+          lastH3 = txt; lastH4 = ''; lastH5 = ''; blocks.push(D.boldPara(txt)); return;
+        }
+        if (tag === 'h4') { lastH4 = wordCleanText(child).replace(/（[^）]*格式）/g, '').trim(); lastH5 = ''; blocks.push(D.boldPara(lastH4)); return; }
+        if (tag === 'h5') { lastH5 = wordCleanText(child); blocks.push(D.boldPara(lastH5)); return; }
+        if (tag === 'p') {
+          var ptxt = wordCleanText(child);
+          if (!ptxt) return;
+          if (!seenMethod && child.classList.contains('small') && child.classList.contains('muted')) { seenMethod = true; return; }
+          blocks.push(D.bodyPara(ptxt)); return;
+        }
+        if (tag === 'ol' || tag === 'ul') {
+          child.querySelectorAll('li').forEach(function (li, i) {
+            var ltxt = wordCleanText(li);
+            if (ltxt) blocks.push(D.bodyPara((tag === 'ol' ? (i + 1) + '. ' : '• ') + ltxt));
+          });
+          return;
+        }
+        if (tag === 'table') {
+          tableNo++;
+          blocks.push(D.captionPara('表 ' + tableNo + captionFor(child)));
+          var tb = tableBlock(child);
+          if (tb) blocks.push(tb);
+          blocks.push(D.sourcePara('資料來源：本研究問卷分析結果。'));
+          lastH4 = ''; lastH5 = '';
+          return;
+        }
+        walk(child);
+      });
+    }
+    walk(clone);
+    blocks.push(D.bodyPara('註：本 Word 版不含長條圖，圖表請見網站報告；所有權重、平均與排序數據均已列於各表中。'));
+    return D.buildDocx(blocks, (cfg.studyTitle || 'AHP') + '分析報告');
+  }
+  function downloadBlob(filename, bytes, type) {
+    var blob = new Blob([bytes], { type: type });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+  if ($('btnDownloadWord')) $('btnDownloadWord').addEventListener('click', function () {
+    try {
+      var bytes = buildWordReport();
+      downloadBlob('ahp_analysis_report.docx', bytes, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    } catch (e) { alert('Word 報告產生失敗：' + e.message); }
+  });
+
   // ---------- 示範資料（依目前架構動態產生，不再寫死 4×4） ----------
   function demoWeightVector(n, pattern) {
     var w = [];

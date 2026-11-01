@@ -111,7 +111,7 @@
 <label>多人彙總方法：<span style="font-weight:normal"><input type="radio" name="aggMethod" value="arithmetic" checked> 算術平均（這兩篇論文做法） <input type="radio" name="aggMethod" value="geometric"> 幾何平均（先取幾何平均再正規化）</span></label>
 <label><input id="showCRH" type="checkbox"> 另列整體層級一致性 C.R.H.（門檻 &lt; 0.1，補充指標，不取代逐矩陣判定）</label>
 <div id="reportSchemes"></div>
-<div><button id="btnGenReport">產生分析報告</button><button id="btnPrintReport" class="secondary">列印／存成 PDF</button><button id="btnDownloadReport" class="secondary">下載報告 HTML</button></div>
+<div><button id="btnGenReport">產生分析報告</button><button id="btnPrintReport" class="secondary">列印／存成 PDF</button><button id="btnDownloadReport" class="secondary">下載報告 HTML</button><button id="btnDownloadWord" class="secondary">下載 Word 報告（第四章格式）</button></div>
 <div id="reportArea"></div>
 </div>
 
@@ -160,6 +160,7 @@
 <footer>計算方法：主特徵向量法，λmax、C.I.＝(λmax−n)/(n−1)、C.R.＝C.I.／R.I.，R.I. 採 Saaty 表（n=4 為 0.90）；多人彙總預設為論文第四章做法（先算個人權重再取算術平均），報告頁可改選幾何平均；全域權重＝主構面平均 × 區域平均；可選列整體層級一致性 C.R.H.。研究設定可另開啟相依修正（關聯性 AHP）與方案／客戶評分。</footer>
 <script src="config.js"></script>
 <script src="assets/ahp.js"></script>
+<script src="assets/docx.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
