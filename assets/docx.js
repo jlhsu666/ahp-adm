@@ -111,7 +111,7 @@
       var tcPr = '<w:tcPr><w:tcW w:w="' + colW + '" w:type="dxa"/>' + (isHeader ? '<w:shd w:val="clear" w:color="auto" w:fill="D9E2F3"/>' : '') + '</w:tcPr>';
       var align = cell.align === 'right' ? 'right' : 'left';
       return '<w:tc>' + tcPr + '<w:p><w:pPr><w:jc w:val="' + align + '"/><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>'
-        + runXml(cell.t, { size: 20, bold: !!(isHeader || cell.bold) }) + '</w:p></w:tc>';
+        + runXml(cell.t, { size: 24, bold: !!(isHeader || cell.bold) }) + '</w:p></w:tc>';
     }
     function rowXml(cells, isHeader) {
       var r = '<w:tr>' + (isHeader ? '<w:trPr><w:tblHeader w:val="true"/></w:trPr>' : '');

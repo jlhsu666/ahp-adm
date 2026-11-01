@@ -880,7 +880,8 @@
   // ---------- Word 報告下載（第四章格式） ----------
   // 格式規範取自 HiTeach 論文第四章「研究對象與結果分析」：
   // 章標題置中、節標題置中、內文標楷體 12pt 行距 1.5 倍首行縮排 2 字；
-  // 表題在表上方（「表 N＋表名」，編號全文件連續），表下方加「資料來源：本研究問卷分析結果。」；
+  // 表題在表上方（「表 4.1 標題」，章內連續編號、標號與標題間有空格），表下方加「資料來源：本研究問卷分析結果。」；
+  // 節標題一律「第X節」格式；表格內文一律 12pt；附錄不進 Word。
   // 逐人權重表含平均與排行兩列、全域表含區域權重／全域權重／排序，權重皆取小數第三位；
   // 長條圖不進 Word（Word 版以各表之權重與排序呈現全部數據，圖表請見網站報告）。
   function chineseNumeral(n) {
@@ -921,9 +922,9 @@
     var sectionTitles = [];
     clone.querySelectorAll('h3').forEach(function (h) {
       var m = wordCleanText(h).match(/^第(\d+)節\s*(.*)$/);
-      if (m) sectionTitles.push(chineseNumeral(parseInt(m[1], 10)) + '節' + m[2]);
+      if (m) sectionTitles.push('第' + chineseNumeral(parseInt(m[1], 10)) + '節 ' + m[2]);
     });
-    if (sectionTitles.length) blocks.push(D.bodyPara('本章分為以下幾節說明：' + sectionTitles.map(function (t, i) { return '第' + chineseNumeral(i + 1) + '節為' + t.replace(/^[一二三四五六七八九十]+節/, ''); }).join('；') + '。'));
+    if (sectionTitles.length) blocks.push(D.bodyPara('本章共分' + sectionTitles.length + '節：' + sectionTitles.join('；') + '。'));
     var tableNo = 0, currentSection = '', currentGroup = '全體', lastH3 = '', lastH4 = '', lastH5 = '', seenMethod = false;
     function groupFromSection(title) {
       return title.replace(/^第\d+節\s*/, '').replace(/問卷結果$/, '') || '全體';
@@ -933,7 +934,6 @@
       var rowCount = tbl.querySelectorAll('tr').length - 1;
       var hasCRH = false;
       if (tbl.querySelectorAll('tr')[0]) tbl.querySelectorAll('tr')[0].querySelectorAll('th,td').forEach(function (c) { if (wordCleanText(c).indexOf('C.R.H.') >= 0) hasCRH = true; });
-      if (currentSection === '附錄') return '構面與指標定義';
       if (lastH3 === '樣本總覽') return '基本資料分析表';
       if (lastH4 === '無效問卷清單') return '無效問卷清單';
       if (lastH4.indexOf('分組與背景分布') >= 0) return '分組與背景分布';
@@ -963,8 +963,10 @@
       if (!rows.length) return '';
       return D.table(rows[0], rows.slice(1));
     }
+    var inAppendix = false;
     function walk(node) {
       node.childNodes.forEach(function (child) {
+        if (inAppendix) return;
         if (child.nodeType !== 1) return;
         var tag = child.tagName.toLowerCase();
         if (child.classList && (child.classList.contains('bar-row') || child.classList.contains('bar-track'))) return;
@@ -972,8 +974,8 @@
         if (tag === 'h3') {
           var txt = wordCleanText(child);
           var m = txt.match(/^第(\d+)節\s*(.*)$/);
-          if (txt.indexOf('附錄') === 0) { currentSection = '附錄'; lastH3 = ''; lastH4 = ''; lastH5 = ''; blocks.push(D.heading2(txt)); return; }
-          if (m) { currentSection = txt; currentGroup = groupFromSection(txt); lastH3 = ''; lastH4 = ''; lastH5 = ''; blocks.push(D.heading2(chineseNumeral(parseInt(m[1], 10)) + '節 ' + m[2])); return; }
+          if (txt.indexOf('附錄') === 0) { inAppendix = true; return; }
+          if (m) { currentSection = txt; currentGroup = groupFromSection(txt); lastH3 = ''; lastH4 = ''; lastH5 = ''; blocks.push(D.heading2('第' + chineseNumeral(parseInt(m[1], 10)) + '節 ' + m[2])); return; }
           lastH3 = txt; lastH4 = ''; lastH5 = ''; blocks.push(D.boldPara(txt)); return;
         }
         if (tag === 'h4') { lastH4 = wordCleanText(child).replace(/（[^）]*格式）/g, '').trim(); lastH5 = ''; blocks.push(D.boldPara(lastH4)); return; }
@@ -993,7 +995,7 @@
         }
         if (tag === 'table') {
           tableNo++;
-          blocks.push(D.captionPara('表 ' + tableNo + captionFor(child)));
+          blocks.push(D.captionPara('表 4.' + tableNo + ' ' + captionFor(child)));
           var tb = tableBlock(child);
           if (tb) blocks.push(tb);
           blocks.push(D.sourcePara('資料來源：本研究問卷分析結果。'));
