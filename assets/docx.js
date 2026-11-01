@@ -2,7 +2,7 @@
 // 產生的是真正的 OOXML 檔案：以 stored（不壓縮）方式把 XML 零件寫進 ZIP，
 // Word、LibreOffice、Google 文件皆可開啟。字體依 HiTeach 論文第四章慣例：
 // 中文標楷體、英文 Times New Roman；內文 12pt、行距 1.5 倍、首行縮排 2 字；
-// 章標題 18pt、節標題 16pt，皆置中；表題置於表上方、表下方加資料來源註。
+// 章標題 18pt、節標題 16pt，皆置中；表題置於表上方，不加資料來源註。
 (function (global) {
   'use strict';
   function esc(s) {
