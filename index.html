@@ -38,6 +38,11 @@
 <div id="fillMatrices"></div>
 </div>
 
+<div class="card" id="fillDependencyCard" hidden>
+<h2>第二階段：因子相依比較（僅本研究開啟相依修正時顯示）</h2>
+<div id="fillDependency"></div>
+</div>
+
 <div class="card">
 <h2>第三步：我的個人結果預覽</h2>
 <p class="muted">先看自己的權重與一致性，確認無誤再送出。C.R. ≦ 0.1 才算通過；未通過仍可送出，但後台分析預設只納入有效問卷（與論文第四章相同）。</p>
@@ -78,6 +83,7 @@
 <div class="tabs">
 <button data-atab="records" class="active">填答紀錄</button>
 <button data-atab="report">分析報告（第四章格式）</button>
+<button data-atab="scoring">方案／客戶評分</button>
 <button data-atab="settings">研究設定</button>
 </div>
 
@@ -109,12 +115,20 @@
 <div id="reportArea"></div>
 </div>
 
+<div id="atab-scoring" hidden>
+<p class="muted">評分表只在研究設定開啟「方案／客戶評分」時可用。填好後按「儲存評分」，產生報告時會用最終全域權重算加權總分與排序。</p>
+<div id="scoringEditor"></div>
+<button id="btnSaveScoring" class="secondary">儲存評分</button>
+<div id="scoringMsg" class="small muted"></div>
+</div>
+
 <div id="atab-settings" hidden>
 <p class="muted">這裡改的是「本機測試用」設定，不會自動改到 GitHub 上的 config.js。要正式更換研究架構，請按「下載新的 config.js」，覆蓋 repo 裡的 config.js 後重新部署。</p>
 <div id="settingsEditor"></div>
 <button id="btnLoadGeneric">載入通用範本（4 構面 × 4 指標）</button>
 <button id="btnLoadThesis">載入論文範本（特教資訊融入教學）</button>
 <button id="btnLoadSMT">載入 SMT 生產效率範本（含年資／職級衍生分組）</button>
+<button id="btnLoadAuto">載入汽車零件重要客戶範本（含相依修正＋評分）</button>
 <button id="btnSaveSettingsLocal" class="secondary">只存到本機測試</button>
 <button id="btnDownloadConfig">下載新的 config.js</button>
 <div id="settingsMsg" class="small muted"></div>
@@ -143,7 +157,7 @@
 </div>
 </section>
 </main>
-<footer>計算方法：主特徵向量法，λmax、C.I.＝(λmax−n)/(n−1)、C.R.＝C.I.／R.I.，R.I. 採 Saaty 表（n=4 為 0.90）；多人彙總預設為論文第四章做法（先算個人權重再取算術平均），報告頁可改選幾何平均；全域權重＝主構面平均 × 區域平均；可選列整體層級一致性 C.R.H.。</footer>
+<footer>計算方法：主特徵向量法，λmax、C.I.＝(λmax−n)/(n−1)、C.R.＝C.I.／R.I.，R.I. 採 Saaty 表（n=4 為 0.90）；多人彙總預設為論文第四章做法（先算個人權重再取算術平均），報告頁可改選幾何平均；全域權重＝主構面平均 × 區域平均；可選列整體層級一致性 C.R.H.。研究設定可另開啟相依修正（關聯性 AHP）與方案／客戶評分。</footer>
 <script src="config.js"></script>
 <script src="assets/ahp.js"></script>
 <script src="assets/app.js"></script>

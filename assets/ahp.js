@@ -183,10 +183,68 @@
     return comps;
   }
 
+  // 相依修正（關聯性 AHP，第二階段；論文式 4-1～4-3 的做法）：
+  //  dependencies: [{ dimensionIndex, baseItemIndex, items: [factorIndex, ...] }]，
+  //  其中 items 包含基準因子本身。對每個相依項目，先以成對比較算出 items 的影響權重，
+  //  再把它填進該構面的相依矩陣 D 的「基準因子那一欄」：D[items[k]][base] = weights[k]，
+  //  其餘列為 0；沒有相依項目的欄保持單位向量。修正後區域權重 = D × 原始區域權重，
+  //  再正規化使總和為 1（每欄總和皆為 1，故理論上已為 1，正規化只消浮點誤差）。
+  //  depComparisons: { "dep0": {...}, "dep1": {...} }，鍵的序號是 dependencies 在陣列中的順序，
+  //  比較值鍵 "i-j" 是 items 陣列中的位置（不是原始因子序號）。
+  //  相依有效判定：每張相依矩陣 C.R. ≦ 0.1（2 因子矩陣 C.R. 恆為 0）。
+  function computeDependency(result, depComparisons, dependencies) {
+    var deps = dependencies || [];
+    var perDimension = result.subs.map(function (sub, di) {
+      var n = sub.weights.length, D = [];
+      for (var i = 0; i < n; i++) { D[i] = []; for (var j = 0; j < n; j++) D[i][j] = (i === j ? 1 : 0); }
+      return { dimensionIndex: di, matrix: D, correctedWeights: sub.weights.slice() };
+    });
+    var depResults = [];
+    deps.forEach(function (entry, idx) {
+      var di = entry.dimensionIndex, base = entry.baseItemIndex, items = entry.items || [];
+      if (di === undefined || base === undefined || !perDimension[di]) return;
+      var r;
+      if (items.length < 2) {
+        r = { weights: [1], ci: 0, cr: 0, valid: true, matrix: [[1]] };
+      } else {
+        var comps = (depComparisons || {})['dep' + idx] || {};
+        r = analyseMatrix(items.length, comps);
+      }
+      items.forEach(function (row, k) {
+        if (row >= 0 && row < perDimension[di].matrix.length) perDimension[di].matrix[row][base] = r.weights[k];
+      });
+      depResults.push({ entryIndex: idx, dimensionIndex: di, baseItemIndex: base, items: items.slice(), weights: r.weights, ci: r.ci, cr: r.cr, valid: r.valid, matrix: r.matrix });
+    });
+    perDimension.forEach(function (pd, di) {
+      var orig = result.subs[di].weights, corr = [];
+      for (var i2 = 0; i2 < orig.length; i2++) {
+        var s = 0; for (var j2 = 0; j2 < orig.length; j2++) s += pd.matrix[i2][j2] * orig[j2];
+        corr[i2] = s;
+      }
+      pd.correctedWeights = normalize(corr);
+    });
+    var maxCR = 0; depResults.forEach(function (d) { if (d.cr > maxCR) maxCR = d.cr; });
+    return { perDimension: perDimension, depResults: depResults, valid: depResults.every(function (d) { return d.valid; }), maxCR: maxCR };
+  }
+
+  // 方案／客戶評分：weights 與每位客戶的 scores 皆依同一因子順序排列，
+  // 總分 = Σ 權重 × 評分（1–5 分），排行以總分由高至低。
+  function scoreAlternatives(weights, customers) {
+    var scored = (customers || []).map(function (c) {
+      var weighted = weights.map(function (w, i) { return w * (c.scores[i] || 0); });
+      var total = 0; weighted.forEach(function (v) { total += v; });
+      return { name: c.name, weighted: weighted, total: total };
+    });
+    var ranks = rankOf(scored.map(function (s) { return s.total; }));
+    scored.forEach(function (s, i) { s.rank = ranks[i]; });
+    return scored;
+  }
+
   var api = { RI: RI, riFor: riFor, matrixFromComparisons: matrixFromComparisons,
     principalEigenvector: principalEigenvector, analyseMatrix: analyseMatrix,
     computeRecord: computeRecord, aggregate: aggregate, rankOf: rankOf,
-    comparisonsFromWeights: comparisonsFromWeights, computeCRH: computeCRH, geoMean: geoMean, normalize: normalize };
+    comparisonsFromWeights: comparisonsFromWeights, computeCRH: computeCRH, geoMean: geoMean, normalize: normalize,
+    computeDependency: computeDependency, scoreAlternatives: scoreAlternatives };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.AHP = api;
 })(typeof window !== 'undefined' ? window : globalThis);

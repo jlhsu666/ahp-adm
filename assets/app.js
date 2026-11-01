@@ -58,6 +58,18 @@
       return (ja < 0 ? 999 : ja) - (jb < 0 ? 999 : jb);
     });
   }
+  function featuresOf(cfg) {
+    var f = (cfg && cfg.features) || {};
+    return { dependency: !!f.dependency, scoring: !!f.scoring };
+  }
+  function depScaleOptions() {
+    var opts = '<option value="">請選擇</option>';
+    var labels = { 9: '絕對強', 7: '極強', 5: '頗強', 3: '稍強', 1: '影響相等' };
+    for (var k = 9; k >= 3; k -= 2) opts += '<option value="' + k + '">左方影響較強（' + k + '）</option>';
+    opts += '<option value="1">影響相等（1）</option>';
+    for (var k2 = 3; k2 <= 9; k2 += 2) opts += '<option value="' + (-k2) + '">右方影響較強（' + k2 + '）</option>';
+    return opts;
+  }
   function selectedSchemes(cfg) {
     var checks = document.querySelectorAll('.scheme-check:checked');
     var all = schemeList(cfg);
@@ -128,12 +140,53 @@
     $('fillMatrices').innerHTML = html;
     document.querySelectorAll('.pair-select').forEach(function (el) { el.addEventListener('change', updateProgress); });
     updateProgress();
+    // 第二階段：相依比較（僅本研究開啟相依修正時顯示；量尺只用 1、3、5、7、9，不用中間值）
+    var depCard = $('fillDependencyCard'), depDiv = $('fillDependency');
+    if (depCard && depDiv) {
+      var feats = featuresOf(cfg), deps = cfg.dependencies || [];
+      if (feats.dependency && deps.length) {
+        depCard.hidden = false;
+        var dh = '<p class="muted">以下為第二階段：因子間的相依（影響力）比較。每一題請以「基準因子」為對象，判斷左、右兩項對它的影響哪個較大：選「左方影響較強」表示左項影響較大，選「右方影響較強」表示右項影響較大，1 表示影響相等。本階段不使用 2、4、6、8 中間值（論文第二階段做法）。</p><p class="small muted" id="depProgressText"></p>';
+        deps.forEach(function (entry, ei) {
+          var dim = dims[entry.dimensionIndex];
+          if (!dim) return;
+          var names = (entry.items || []).map(function (ii) { return dim.items[ii]; });
+          var baseName = dim.items[entry.baseItemIndex];
+          dh += '<h3>' + esc(dim.name) + ' — 以「' + esc(baseName) + '」為基準</h3>';
+          pairs(names.length).forEach(function (p) {
+            dh += '<div class="pair"><div class="names"><span>' + esc(names[p[0]]) + '</span><span>' + esc(names[p[1]]) + '</span></div>'
+              + '<select class="dep-select" data-dep="' + ei + '" data-pair="' + p[0] + '-' + p[1] + '">' + depScaleOptions() + '</select>'
+              + '<div class="scale">左方影響較強 9 … 1 影響相等 … 右方影響較強 9（不使用中間值）</div></div>';
+          });
+        });
+        depDiv.innerHTML = dh;
+        var updateDepProgress = function () {
+          var sels = document.querySelectorAll('.dep-select'), done = 0;
+          sels.forEach(function (el) { if (el.value) done++; });
+          var el = $('depProgressText'); if (el) el.textContent = '相依比較已完成 ' + done + ' / ' + sels.length + ' 題';
+        };
+        document.querySelectorAll('.dep-select').forEach(function (el) { el.addEventListener('change', updateDepProgress); });
+        updateDepProgress();
+      } else {
+        depCard.hidden = true; depDiv.innerHTML = '';
+      }
+    }
   }
   function collectComparisons() {
     var comps = { main: {} };
     var missing = 0;
     document.querySelectorAll('.pair-select').forEach(function (el) {
       var key = el.getAttribute('data-matrix'), pair = el.getAttribute('data-pair');
+      if (!el.value) { missing++; return; }
+      if (!comps[key]) comps[key] = {};
+      comps[key][pair] = parseInt(el.value, 10);
+    });
+    return { comps: comps, missing: missing };
+  }
+  function collectDependencyComparisons() {
+    var comps = {}, missing = 0;
+    document.querySelectorAll('.dep-select').forEach(function (el) {
+      var key = 'dep' + el.getAttribute('data-dep'), pair = el.getAttribute('data-pair');
       if (!el.value) { missing++; return; }
       if (!comps[key]) comps[key] = {};
       comps[key][pair] = parseInt(el.value, 10);
@@ -151,12 +204,14 @@
     var cfg = activeConfig();
     var bg = {};
     document.querySelectorAll('[data-bg]').forEach(function (el) { bg[el.getAttribute('data-bg')] = el.value; });
-    return {
+    var rec = {
       id: '', submitted_at: new Date().toISOString(),
       group: $('fGroup').value, background: bg,
       comparisons: collectComparisons().comps,
       structure: structureOf(cfg), demo: false
     };
+    if (featuresOf(cfg).dependency) rec.dependencies = collectDependencyComparisons().comps;
+    return rec;
   }
   function matrixTableHTML(names, matrix) {
     var h = '<table><tr><th></th>' + names.map(function (n) { return '<th>' + esc(n) + '</th>'; }).join('') + '</tr>';
@@ -191,12 +246,37 @@
     var crh = result.crh || AHP.computeCRH(result);
     h += '<p>整份問卷一致性：<b>' + (result.valid ? '<span class="ok">有效（' + matrixCount + ' 張矩陣 C.R. 皆 ≦ 0.1）</span>' : '<span class="bad">未通過（有矩陣 C.R. &gt; 0.1，後台分析預設會排除）</span>') + '</b>'
       + '；整體層級一致性 C.R.H. = ' + fmt(crh.crh) + '（C.I.H. ' + fmt(crh.cih) + '／R.I.H. ' + fmt(crh.rih) + '，論文門檻 C.R.H. &lt; 0.1，僅供參考，不取代逐矩陣判定）。</p>';
+    // 相依修正後個人結果（僅開啟相依且有第二階段資料時）
+    if (featuresOf(cfg).dependency && (cfg.dependencies || []).length && record.dependencies) {
+      var dep = AHP.computeDependency(result, record.dependencies, cfg.dependencies || []);
+      h += '<h3>相依修正後結果（個人，第二階段）</h3>';
+      h += '<p>相依有效性：<b>' + (dep.valid ? '<span class="ok">通過（各相依矩陣 C.R. 皆 ≦ 0.1）</span>' : '<span class="bad">未通過（最大 C.R. ' + fmt(dep.maxCR) + '）</span>') + '</b></p>';
+      h += '<table><tr><th>相依項目（基準因子）</th><th class="num">C.I.</th><th class="num">C.R.</th></tr>';
+      dep.depResults.forEach(function (dr) {
+        var d = dims[dr.dimensionIndex], baseName = d ? d.items[dr.baseItemIndex] : '';
+        h += '<tr><td>' + esc(d ? d.name : '') + ' — ' + esc(baseName) + '</td><td class="num">' + fmt(dr.ci) + '</td><td class="num">' + fmt(dr.cr) + '</td></tr>';
+      });
+      h += '</table>';
+      dims.forEach(function (d, di) {
+        var corr = dep.perDimension[di].correctedWeights;
+        h += '<h4>' + esc(d.name) + '（修正後區域權重）</h4><table><tr><th>子構面</th><th class="num">原始區域權重</th><th class="num">修正後區域權重</th><th class="num">修正後全域權重</th></tr>';
+        d.items.forEach(function (it, ii) {
+          h += '<tr><td>' + esc(it) + '</td><td class="num">' + fmt(result.subs[di].weights[ii]) + '</td><td class="num">' + fmt(corr[ii]) + '</td><td class="num">' + fmt(result.main.weights[di] * corr[ii]) + '</td></tr>';
+        });
+        h += '</table>';
+      });
+      var depGlobal = [];
+      dims.forEach(function (d, di) { d.items.forEach(function (it, ii) { depGlobal.push({ label: d.name + ' — ' + it, v: result.main.weights[di] * dep.perDimension[di].correctedWeights[ii] }); }); });
+      depGlobal.sort(function (a, b) { return b.v - a.v; });
+      h += '<h4>相依修正後全域排行（個人）</h4><ol>' + depGlobal.map(function (g) { return '<li>' + esc(g.label) + '：' + fmt(g.v) + '</li>'; }).join('') + '</ol>';
+    }
     return h;
   }
 
   $('btnPreview').addEventListener('click', function () {
     var c = collectComparisons();
-    if (c.missing) { alert('還有 ' + c.missing + ' 題未填，請填完再計算。'); return; }
+    var dc = featuresOf(activeConfig()).dependency ? collectDependencyComparisons() : { missing: 0 };
+    if (c.missing + dc.missing) { alert('還有 ' + (c.missing + dc.missing) + ' 題未填（含相依比較 ' + dc.missing + ' 題），請填完再計算。'); return; }
     var record = collectRecord();
     var result = AHP.computeRecord(record.structure, record);
     lastPreview = { record: record, result: result };
@@ -517,6 +597,90 @@
     h += '<h4>全域排行圖（論文圖 5、6、7 格式）</h4>' + barChart(agg.global.map(function (g) { return { label: g.dimension + ' — ' + g.item, value: g.global }; }), maxG);
     return h;
   }
+  function dependentSectionHTML(structure, analysed, overallAgg, aggMethod, methodLabel, cfg) {
+    var deps = cfg.dependencies || [];
+    var withDep = analysed.filter(function (x) { return x.record.dependencies && Object.keys(x.record.dependencies).length; });
+    if (!deps.length) return '<h3>相依修正後結果</h3><p class="muted">本研究未定義相依關係，故無相依修正結果。</p>';
+    if (!withDep.length) return '<h3>相依修正後結果</h3><p class="muted">本研究已開啟相依修正，但納入資料中沒有第二階段相依比較值（可能是在開啟相依功能前收的問卷），故無法計算相依修正結果。相依分析只納入有第二階段資料的問卷。</p>';
+    var withDepComputed = withDep.map(function (x) { return { record: x.record, result: x.result, dep: AHP.computeDependency(x.result, x.record.dependencies, deps) }; });
+    var depValid = withDepComputed.filter(function (x) { return x.dep.valid; });
+    var h = '<h3>相依修正後結果（整體）</h3>';
+    h += '<p>有第二階段資料 ' + withDep.length + ' 份，其中相依矩陣全數通過（C.R. ≦ 0.1）' + depValid.length + ' 份。以下相依彙總以通過者為準（若報告勾選「只納入有效」，此處再以第一階段有效為前提，兩者皆已在納入資料中篩過）。</p>';
+    h += '<table><tr><th>編號</th><th class="num">相依最大 C.R.</th><th>相依是否通過</th></tr>';
+    withDepComputed.forEach(function (x) {
+      h += '<tr><td>' + esc(x.record.id) + '</td><td class="num">' + fmt(x.dep.maxCR) + '</td><td>' + (x.dep.valid ? '<span class="ok">通過</span>' : '<span class="bad">未通過</span>') + '</td></tr>';
+    });
+    h += '</table>';
+    if (!depValid.length) { h += '<p class="bad">沒有相依通過的問卷，故無法產生相依彙總。</p>'; return h; }
+    // 相依彙總：主構面平均取通過者，主構面不變；子構面平均改用修正後區域權重。
+    var aggFn = (aggMethod === 'geometric') ? AHP.geoMean : function (arr) { var s = 0; arr.forEach(function (v) { s += v; }); return arr.length ? s / arr.length : 0; };
+    var dims = structure.dimensions;
+    var mainAvg = AHP.normalize(dims.map(function (_, di) { return aggFn(depValid.map(function (x) { return x.result.main.weights[di]; })); }));
+    var subAvgCorr = dims.map(function (dim, di) {
+      return AHP.normalize(dim.items.map(function (_, ii) { return aggFn(depValid.map(function (x) { return x.dep.perDimension[di].correctedWeights[ii]; })); }));
+    });
+    var depGlobal = [];
+    dims.forEach(function (dim, di) { dim.items.forEach(function (it, ii) { depGlobal.push({ dimensionIndex: di, itemIndex: ii, dimension: dim.name, item: it, dimensionWeight: mainAvg[di], local: subAvgCorr[di][ii], global: mainAvg[di] * subAvgCorr[di][ii] }); }); });
+    var depRanks = AHP.rankOf(depGlobal.map(function (g) { return g.global; }));
+    depGlobal.forEach(function (g, i) { g.rank = depRanks[i]; });
+    h += '<h4>相依修正後子構面平均（整體）</h4>';
+    dims.forEach(function (dim, di) {
+      h += '<h5>' + esc(dim.name) + '</h5><table><tr><th>子構面</th><th class="num">未相依區域平均</th><th class="num">修正後區域平均</th></tr>';
+      dim.items.forEach(function (it, ii) {
+        h += '<tr><td>' + esc(it) + '</td><td class="num">' + fmt(overallAgg.subAvg[di][ii]) + '</td><td class="num">' + fmt(subAvgCorr[di][ii]) + '</td></tr>';
+      });
+      h += '</table>';
+    });
+    h += '<h4>相依前後全域權重比較（論文表 4-6 格式）</h4><table><tr><th>主構面 — 子構面</th><th class="num">未相依全域權重</th><th class="num">未相依排行</th><th class="num">修正後全域權重</th><th class="num">修正後排行</th><th class="num">權重差（修正後－未相依）</th></tr>';
+    var depByKey = {};
+    depGlobal.forEach(function (g) { depByKey[g.dimensionIndex + '-' + g.itemIndex] = g; });
+    overallAgg.global.forEach(function (g) {
+      var dg = depByKey[g.dimensionIndex + '-' + g.itemIndex];
+      h += '<tr><td>' + esc(g.dimension) + ' — ' + esc(g.item) + '</td><td class="num">' + fmt(g.global) + '</td><td class="num">' + g.rank + '</td><td class="num">' + fmt(dg.global) + '</td><td class="num">' + dg.rank + '</td><td class="num">' + (dg.global - g.global >= 0 ? '+' : '') + fmt(dg.global - g.global) + '</td></tr>';
+    });
+    h += '</table>';
+    var depSorted = depGlobal.slice().sort(function (a, b) { return a.rank - b.rank; });
+    var maxG = Math.max.apply(null, depSorted.map(function (g) { return g.global; }));
+    h += '<h4>相依修正後全域排行圖</h4>' + barChart(depSorted.map(function (g) { return { label: g.dimension + ' — ' + g.item, value: g.global }; }), maxG);
+    h += '<textarea class="report-note" placeholder="研究者解讀（可在此補充相依修正前後的差異詮釋）"></textarea>';
+    return h;
+  }
+  function scoringSectionHTML(structure, finalAgg, isDep, cfg) {
+    var customers = loadScoring();
+    if (!customers.length) return '<h3>方案／客戶評分結果</h3><p class="muted">本研究已開啟評分，但評分表是空的。請先到「方案／客戶評分」頁填寫並儲存，再產生報告。</p>';
+    var dims = structure.dimensions;
+    var factorOrder = [];
+    dims.forEach(function (dim, di) { dim.items.forEach(function (it, ii) { factorOrder.push({ dimensionIndex: di, itemIndex: ii, dimension: dim.name, item: it }); }); });
+    var weights = factorOrder.map(function (f) {
+      var found = finalAgg.global.filter(function (g) { return g.dimensionIndex === f.dimensionIndex && g.itemIndex === f.itemIndex; })[0];
+      return found ? found.global : 0;
+    });
+    var complete = [], incomplete = [];
+    customers.forEach(function (c) {
+      var scores = factorOrder.map(function (f) { var v = (c.scores || {})[f.dimensionIndex + '-' + f.itemIndex]; return (v === undefined || v === null || v === '') ? null : Number(v); });
+      if (scores.some(function (v) { return v === null || isNaN(v) || v < 1 || v > 5; })) incomplete.push(c.name);
+      else complete.push({ name: c.name, scores: scores });
+    });
+    var h = '<h3>方案／客戶評分結果</h3><p class="small muted">評分採用' + (isDep ? '相依修正後' : '未相依') + '最終全域權重；每因子評分 1–5 分，總分 = Σ 權重 × 評分。</p>';
+    if (incomplete.length) h += '<p class="warn">以下客戶／方案因評分未填滿（或超出 1–5 分）未納入排序：' + esc(incomplete.join('、')) + '。</p>';
+    if (!complete.length) { h += '<p class="bad">沒有評分完整的客戶／方案，故無法計算總分。</p>'; return h; }
+    var scored = AHP.scoreAlternatives(weights, complete);
+    h += '<table><tr><th>主構面 — 因子</th><th class="num">權重</th>' + complete.map(function (c) { return '<th class="num">' + esc(c.name) + ' 評分</th><th class="num">' + esc(c.name) + ' 加權分</th>'; }).join('') + '</tr>';
+    factorOrder.forEach(function (f, fi) {
+      h += '<tr><td>' + esc(f.dimension) + ' — ' + esc(f.item) + '</td><td class="num">' + fmt(weights[fi]) + '</td>';
+      complete.forEach(function (c, ci) {
+        h += '<td class="num">' + c.scores[fi] + '</td><td class="num">' + fmt(scored[ci].weighted[fi]) + '</td>';
+      });
+      h += '</tr>';
+    });
+    h += '<tr><th>總分</th><th></th>' + complete.map(function (c, ci) { return '<th class="num"></th><th class="num">' + fmt(scored[ci].total) + '</th>'; }).join('') + '</tr>';
+    h += '<tr><th>排序</th><th></th>' + complete.map(function (c, ci) { return '<th class="num"></th><th class="num">' + scored[ci].rank + '</th>'; }).join('') + '</tr></table>';
+    var maxT = Math.max.apply(null, scored.map(function (s) { return s.total; }));
+    h += '<h4>方案／客戶總分比較圖</h4>' + barChart(scored.map(function (s) { return { label: s.name, value: s.total }; }), maxT);
+    h += '<p>排序：' + scored.slice().sort(function (a, b) { return a.rank - b.rank; }).map(function (s) { return '第' + s.rank + '名 ' + esc(s.name) + '（' + fmt(s.total) + '）'; }).join('，') + '。</p>';
+    h += '<textarea class="report-note" placeholder="研究者解讀（可在此補充評分結果的詮釋）"></textarea>';
+    return h;
+  }
   function generateReport() {
     var onlyValid = $('onlyValid').checked;
     var issued = parseInt($('issuedCount').value, 10);
@@ -569,8 +733,26 @@
     });
     if (!analysed.length) { h += '<p class="bad">本次分析沒有可納入的問卷（可能全部皆為無效且已勾選只納入有效）。請取消勾選或檢查一致性。</p></div>'; $('reportArea').innerHTML = h; return; }
     var sectionNo = 1;
+    var overallAgg = AHP.aggregate(structure, analysed, aggMethod);
     h += '<h3>第' + sectionNo + '節 全體問卷結果</h3>'; sectionNo++;
-    h += groupSectionHTML('全體', analysed, AHP.aggregate(structure, analysed, aggMethod), structure, { methodLabel: methodLabel, showCRH: showCRH });
+    h += groupSectionHTML('全體', analysed, overallAgg, structure, { methodLabel: methodLabel, showCRH: showCRH });
+    var featsReport = featuresOf(cfg);
+    var depAggForScoring = null;
+    if (featsReport.dependency) {
+      h += '<h3>第' + sectionNo + '節 相依修正後結果</h3>'; sectionNo++;
+      h += dependentSectionHTML(structure, analysed, overallAgg, aggMethod, methodLabel, cfg);
+      // 評分若開啟且有相依通過資料，評分權重改用相依修正後權重（重算一次，與 dependentSectionHTML 同方法）
+      var withDepR = analysed.filter(function (x) { return x.record.dependencies && Object.keys(x.record.dependencies).length; }).map(function (x) { return { record: x.record, result: x.result, dep: AHP.computeDependency(x.result, x.record.dependencies, cfg.dependencies || []) }; }).filter(function (x) { return x.dep.valid; });
+      if (withDepR.length) {
+        var aggFn2 = (aggMethod === 'geometric') ? AHP.geoMean : function (arr) { var s = 0; arr.forEach(function (v) { s += v; }); return arr.length ? s / arr.length : 0; };
+        var mainAvg2 = AHP.normalize(structure.dimensions.map(function (_, di) { return aggFn2(withDepR.map(function (x) { return x.result.main.weights[di]; })); }));
+        var subAvg2 = structure.dimensions.map(function (dim, di) { return AHP.normalize(dim.items.map(function (_, ii) { return aggFn2(withDepR.map(function (x) { return x.dep.perDimension[di].correctedWeights[ii]; })); })); });
+        var g2 = [];
+        structure.dimensions.forEach(function (dim, di) { dim.items.forEach(function (it, ii) { g2.push({ dimensionIndex: di, itemIndex: ii, dimension: dim.name, item: it, dimensionWeight: mainAvg2[di], local: subAvg2[di][ii], global: mainAvg2[di] * subAvg2[di][ii] }); }); });
+        var r2 = AHP.rankOf(g2.map(function (g) { return g.global; })); g2.forEach(function (g, i) { g.rank = r2[i]; });
+        depAggForScoring = { global: g2 };
+      }
+    }
     var schemes = selectedSchemes(cfg);
     schemes.forEach(function (scheme) {
       var derived = analysed.map(function (x) {
@@ -617,6 +799,10 @@
       h += groupBarChart(items, groups);
       h += '<textarea class="report-note" placeholder="研究者解讀（可在此補充組間差異的詮釋，列印／下載報告時會一併印出）"></textarea>';
     });
+    if (featsReport.scoring) {
+      h += '<h3>第' + sectionNo + '節 方案／客戶評分結果</h3>'; sectionNo++;
+      h += scoringSectionHTML(structure, depAggForScoring || overallAgg, !!depAggForScoring, cfg);
+    }
     // 附錄：構面與指標定義（有填定義時才列出）
     var hasDesc = structure.dimensions.some(function (d) { return dimDesc(d) || (d.itemDescs || []).some(function (x) { return !!x; }); });
     if (hasDesc) {
@@ -668,7 +854,15 @@
       (cfg.backgroundFields || []).forEach(function (f, fi) {
         bg[f.key] = (f.options && f.options.length) ? f.options[(idx + fi) % f.options.length] : '';
       });
-      records.push({ id: 'DEMO0' + (idx + 1), submitted_at: new Date(Date.now() - (8 - idx) * 86400000).toISOString(), group: demoGroups[idx < 4 ? 0 : 1], background: bg, comparisons: comps, structure: structure, demo: true });
+      var demoRec = { id: 'DEMO0' + (idx + 1), submitted_at: new Date(Date.now() - (8 - idx) * 86400000).toISOString(), group: demoGroups[idx < 4 ? 0 : 1], background: bg, comparisons: comps, structure: structure, demo: true };
+      if (featuresOf(cfg).dependency && (cfg.dependencies || []).length) {
+        var depComps = {};
+        (cfg.dependencies || []).forEach(function (entry, ei) {
+          depComps['dep' + ei] = AHP.comparisonsFromWeights(demoWeightVector((entry.items || []).length, [0.5, 0.3, 0.2]));
+        });
+        demoRec.dependencies = depComps;
+      }
+      records.push(demoRec);
     }
     currentRecords = records; currentSource = 'demo';
     var invalidNote = dims.length >= 3 ? '最後一筆刻意設為不一致，示範無效問卷排除效果。' : '主構面少於 3 項時一致性恆為 0，故無法示範無效筆數。';
@@ -676,11 +870,75 @@
     renderRecords();
   });
 
+  // ---------- 後台：方案／客戶評分（僅開啟評分功能時使用；資料只存在本機瀏覽器） ----------
+  function loadScoring() {
+    try { var v = JSON.parse(localStorage.getItem('ahp_scoring_v3') || 'null'); if (v && v.customers) return v.customers; } catch (e) {}
+    return [];
+  }
+  function readScoringEditor() {
+    var customers = [];
+    document.querySelectorAll('[data-score-cust-name]').forEach(function (nameEl, ci) {
+      var scores = {};
+      document.querySelectorAll('[data-score-cust="' + ci + '"]').forEach(function (el) {
+        var v = parseInt(el.value, 10);
+        if (!isNaN(v)) scores[el.getAttribute('data-score-factor')] = v;
+      });
+      customers.push({ name: nameEl.value, scores: scores });
+    });
+    return customers;
+  }
+  function renderScoringEditor(draft) {
+    if (!$('scoringEditor')) return;
+    var cfg = activeConfig();
+    if (!featuresOf(cfg).scoring) {
+      $('scoringEditor').innerHTML = '<p class="muted">本研究未開啟評分功能。請先到「研究設定」勾選「開啟方案／客戶評分」，再回來填評分表。</p>';
+      return;
+    }
+    var customers = draft || loadScoring();
+    if (!customers.length) customers = [{ name: '客戶A', scores: {} }, { name: '客戶B', scores: {} }];
+    var dims = cfg.dimensions;
+    var h = '<p class="small muted">每一列是一個因子，每一欄是一位客戶／方案，評分 1–5 分（分數越高越好）。報告產生時會用最終全域權重（相依開啟時用相依修正後權重，否則用未相依權重）算加權總分與排序。評分表只存在這台瀏覽器，報告 HTML 下載後會把算好的評分結果一併帶走。</p>';
+    h += '<table><tr><th>主構面 — 因子</th>' + customers.map(function (c, ci) { return '<th><input data-score-cust-name="' + ci + '" type="text" value="' + esc(c.name) + '" style="width:110px"></th>'; }).join('') + '</tr>';
+    dims.forEach(function (d, di) {
+      d.items.forEach(function (it, ii) {
+        var key = di + '-' + ii;
+        h += '<tr><td>' + esc(d.name) + ' — ' + esc(it) + '</td>' + customers.map(function (c, ci) {
+          var v = (c.scores && c.scores[key] !== undefined) ? c.scores[key] : '';
+          return '<td><input data-score-cust="' + ci + '" data-score-factor="' + key + '" type="number" min="1" max="5" step="1" value="' + v + '" style="width:70px"></td>';
+        }).join('') + '</tr>';
+      });
+    });
+    h += '</table>';
+    h += '<div style="margin-top:10px"><button class="secondary" id="btnAddScoringCust">新增客戶／方案</button> <button class="secondary danger" id="btnDelScoringCust">刪除最後一位</button> <button class="secondary" id="btnLoadScoringExample">載入汽車零件範例評分（A／B／C）</button></div>';
+    $('scoringEditor').innerHTML = h;
+    $('btnAddScoringCust').addEventListener('click', function () { var cs = readScoringEditor(); cs.push({ name: '客戶' + String.fromCharCode(65 + cs.length), scores: {} }); renderScoringEditor(cs); });
+    $('btnDelScoringCust').addEventListener('click', function () { var cs = readScoringEditor(); if (cs.length > 1) cs.pop(); renderScoringEditor(cs); });
+    $('btnLoadScoringExample').addEventListener('click', function () {
+      var preset = (baseConfig().presets && baseConfig().presets.auto);
+      if (!preset || !preset.scoringExample) { alert('config.js 尚未內含範例評分。'); return; }
+      var cur = activeConfig();
+      var sameStruct = JSON.stringify(cur.dimensions.map(function (d) { return d.items; })) === JSON.stringify(preset.dimensions.map(function (d) { return d.items; }));
+      if (!sameStruct) { alert('目前架構不是汽車零件範本，無法載入範例評分。請先在「研究設定」載入汽車零件範本。'); return; }
+      renderScoringEditor(clone(preset.scoringExample));
+      $('scoringMsg').textContent = '已載入範例評分，請按「儲存評分」後再產生報告。';
+    });
+  }
+  if ($('btnSaveScoring')) $('btnSaveScoring').addEventListener('click', function () {
+    var cs = readScoringEditor();
+    try { localStorage.setItem('ahp_scoring_v3', JSON.stringify({ customers: cs })); } catch (e) {}
+    $('scoringMsg').textContent = '評分已儲存（本機瀏覽器）。產生報告時會一併列出評分結果。';
+  });
+
   // ---------- 後台：研究設定（構面增刪、定義、背景欄位、衍生分組規則皆可編） ----------
   function renderSettingsEditor(draft) {
     var cfg = draft || activeConfig();
     var h = '<label>研究標題</label><input id="setTitle" type="text" value="' + esc(cfg.studyTitle) + '">';
     h += '<label>副標題</label><input id="setSubtitle" type="text" value="' + esc(cfg.studySubtitle || '') + '">';
+    var feats0 = featuresOf(cfg);
+    h += '<h3>功能開關（依研究主題開啟；預設全關，行為與 v2 相同）</h3>'
+      + '<label style="font-weight:normal"><input type="checkbox" id="setFeatureDep"' + (feats0.dependency ? ' checked' : '') + '> 開啟相依修正（關聯性 AHP 第二階段：因子間影響力比較＋矩陣乘積修正）</label>'
+      + '<label style="font-weight:normal"><input type="checkbox" id="setFeatureScoring"' + (feats0.scoring ? ' checked' : '') + '> 開啟方案／客戶評分（後台評分表：每因子 1–5 分，加權總分排序）</label>'
+      + '<p class="small muted">開關存在 config.js 的 features 裡。相依關閉時，第二階段問卷與相依報告都不出現；評分關閉時，評分頁不顯示。兩個開關獨立：只開評分時，評分用未相依權重算。</p>';
     h += '<label>主要分組欄位名稱（留空表示不使用主要分組，改用背景欄位分組）</label><input id="setGroupLabel" type="text" value="' + esc(cfg.groupLabel || '') + '">';
     h += '<label>主要分組選項（每行一個）</label><textarea id="setGroups">' + esc((cfg.groupOptions || []).join('\n')) + '</textarea>';
     h += '<h3>背景欄位（填答者基本資料；分組方案可任選其中一個欄位）</h3><div id="setBgList">';
@@ -700,6 +958,21 @@
         + '<button class="secondary danger" data-dimdel="' + di + '">刪除此構面</button></div>';
     });
     h += '</div><button class="secondary" id="btnAddDim">新增主構面</button>';
+    h += '<h3>相依關係（僅開啟相依修正時生效；每列是一個基準因子）</h3><p class="small muted">每列選一個構面、一個基準因子，並勾選要一起比較的因子（必須包含基準因子本身；未勾選基準時儲存會自動補上）。問卷第二階段會對每列的勾選因子做兩兩影響力比較，算出影響權重後填進該構面的相依矩陣。同一構面、同一基準因子請只寫一列（重複時以後列為準）。未列出的構面／基準因子保持獨立，修正時該欄為單位向量。</p><div id="setDepList">';
+    (cfg.dependencies || []).forEach(function (entry, ei) {
+      var dimIdx = entry.dimensionIndex, dim = cfg.dimensions[dimIdx];
+      h += '<div class="card" style="margin:8px 0" data-deprow="' + ei + '"><label>構面</label><select data-depdim="' + ei + '">'
+        + cfg.dimensions.map(function (d, di) { return '<option value="' + di + '"' + (di === dimIdx ? ' selected' : '') + '>' + esc(d.name) + '</option>'; }).join('') + '</select>';
+      h += '<label>基準因子</label><select data-depbase="' + ei + '">';
+      if (dim) dim.items.forEach(function (it, ii) { h += '<option value="' + ii + '"' + (ii === entry.baseItemIndex ? ' selected' : '') + '>' + esc(it) + '</option>'; });
+      h += '</select><label>一起比較的因子（勾選）</label><div>';
+      if (dim) dim.items.forEach(function (it, ii) {
+        var checked = (entry.items || []).indexOf(ii) >= 0 || ii === entry.baseItemIndex;
+        h += '<label style="display:inline-block;margin-right:12px;font-weight:normal"><input type="checkbox" data-depitem="' + ei + '" value="' + ii + '"' + (checked ? ' checked' : '') + '> ' + esc(it) + '</label>';
+      });
+      h += '</div><button class="secondary danger" data-depdel="' + ei + '">刪除此相依列</button></div>';
+    });
+    h += '</div><button class="secondary" id="btnAddDep">新增相依列</button>';
     h += '<h3>衍生分組規則（把原始選項合併／二分，例如年資三區間併成「20年以下」；留空表示不衍生，直接用原始值分組）</h3><p class="small muted">規則寫法：每個衍生組填名稱＋原始值（每行一個，必須與上面該欄位的選項文字完全相同）。報告分組時，符合第一個規則的原始值就歸到該衍生組；對不上任何規則的會標示「未歸類」。</p><div id="setRuleList">';
     schemeList(cfg).forEach(function (s) {
       var rules = (cfg.groupingRules || {})[s.field] || [];
@@ -716,6 +989,9 @@
     // 設定頁內的增刪按鈕：先讀出目前編輯狀態再改，避免已打的字被重繪洗掉。
     var addBg = $('btnAddBg'); if (addBg) addBg.addEventListener('click', function () { var c = readSettingsEditor(); c.backgroundFields.push({ key: 'field' + (c.backgroundFields.length + 1), label: '新欄位', options: ['選項一', '選項二'] }); renderSettingsEditor(c); });
     var addDim = $('btnAddDim'); if (addDim) addDim.addEventListener('click', function () { var c = readSettingsEditor(); c.dimensions.push({ name: '新構面', desc: '', items: ['新指標一', '新指標二'], itemDescs: [] }); renderSettingsEditor(c); });
+    var addDep = $('btnAddDep'); if (addDep) addDep.addEventListener('click', function () { var c = readSettingsEditor(); if (!c.dependencies) c.dependencies = []; c.dependencies.push({ dimensionIndex: 0, baseItemIndex: 0, items: [0] }); renderSettingsEditor(c); });
+    document.querySelectorAll('[data-depdel]').forEach(function (b) { b.addEventListener('click', function () { var c = readSettingsEditor(); c.dependencies.splice(parseInt(b.getAttribute('data-depdel'), 10), 1); renderSettingsEditor(c); }); });
+    document.querySelectorAll('[data-depdim]').forEach(function (s) { s.addEventListener('change', function () { var c = readSettingsEditor(); renderSettingsEditor(c); }); });
     document.querySelectorAll('[data-bgdel]').forEach(function (b) { b.addEventListener('click', function () { var c = readSettingsEditor(); c.backgroundFields.splice(parseInt(b.getAttribute('data-bgdel'), 10), 1); renderSettingsEditor(c); }); });
     document.querySelectorAll('[data-dimdel]').forEach(function (b) { b.addEventListener('click', function () { var c = readSettingsEditor(); c.dimensions.splice(parseInt(b.getAttribute('data-dimdel'), 10), 1); renderSettingsEditor(c); }); });
     document.querySelectorAll('[data-ruleadd]').forEach(function (b) { b.addEventListener('click', function () { var c = readSettingsEditor(); var f = b.getAttribute('data-ruleadd'); if (!c.groupingRules) c.groupingRules = {}; if (!c.groupingRules[f]) c.groupingRules[f] = []; c.groupingRules[f].push({ name: '新分組', values: [] }); renderSettingsEditor(c); }); });
@@ -724,6 +1000,18 @@
   function readSettingsEditor() {
     var cfg = clone(activeConfig());
     cfg.studyTitle = $('setTitle').value; cfg.studySubtitle = $('setSubtitle').value;
+    cfg.features = { dependency: !!($('setFeatureDep') && $('setFeatureDep').checked), scoring: !!($('setFeatureScoring') && $('setFeatureScoring').checked) };
+    cfg.dependencies = [];
+    document.querySelectorAll('[data-deprow]').forEach(function (row) {
+      var dimSel = row.querySelector('[data-depdim]'), baseSel = row.querySelector('[data-depbase]');
+      if (!dimSel || !baseSel) return;
+      var di = parseInt(dimSel.value, 10), base = parseInt(baseSel.value, 10);
+      var items = [];
+      row.querySelectorAll('[data-depitem]:checked').forEach(function (cb) { items.push(parseInt(cb.value, 10)); });
+      if (items.indexOf(base) < 0) items.unshift(base);
+      items.sort(function (a, b) { return a - b; });
+      cfg.dependencies.push({ dimensionIndex: di, baseItemIndex: base, items: items });
+    });
     cfg.groupLabel = $('setGroupLabel').value;
     cfg.groupOptions = $('setGroups').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
     var bgCount = document.querySelectorAll('[data-bgkey]').length;
@@ -757,17 +1045,17 @@
   }
   function loadPreset(preset, msg) {
     var cfg = clone(activeConfig());
-    ['studyTitle', 'studySubtitle', 'groupLabel', 'groupOptions', 'backgroundFields', 'groupingRules', 'dimensions'].forEach(function (k) { if (preset[k] !== undefined) cfg[k] = clone(preset[k]); });
+    ['studyTitle', 'studySubtitle', 'groupLabel', 'groupOptions', 'backgroundFields', 'groupingRules', 'dimensions', 'features', 'dependencies'].forEach(function (k) { if (preset[k] !== undefined) cfg[k] = clone(preset[k]); });
     try { localStorage.setItem('ahp_config_override', JSON.stringify(cfg)); } catch (e) {}
     renderFill(); renderSettingsEditor(); renderReportSchemes(); $('settingsMsg').textContent = msg;
   }
   $('btnLoadGeneric').addEventListener('click', function () {
-    var cfg = clone(activeConfig()); cfg.dimensions = clone(baseConfig().genericDimensions);
+    var cfg = clone(activeConfig()); cfg.dimensions = clone(baseConfig().genericDimensions); cfg.features = { dependency: false, scoring: false }; cfg.dependencies = [];
     try { localStorage.setItem('ahp_config_override', JSON.stringify(cfg)); } catch (e) {}
     renderFill(); renderSettingsEditor(); $('settingsMsg').textContent = '已載入通用範本到本機測試；正式部署請下載新的 config.js。';
   });
   $('btnLoadThesis').addEventListener('click', function () {
-    var cfg = clone(activeConfig()); cfg.dimensions = clone(baseConfig().dimensions);
+    var cfg = clone(activeConfig()); cfg.dimensions = clone(baseConfig().dimensions); cfg.features = { dependency: false, scoring: false }; cfg.dependencies = [];
     try { localStorage.setItem('ahp_config_override', JSON.stringify(cfg)); } catch (e) {}
     renderFill(); renderSettingsEditor(); $('settingsMsg').textContent = '已載入論文範本（特教資訊融入教學）到本機測試。';
   });
@@ -776,10 +1064,17 @@
     if (!preset) { alert('config.js 尚未內含 SMT 範本，請確認已更新到通用版 config.js。'); return; }
     loadPreset(preset, '已載入 SMT 生產效率範本到本機測試（含年資／職級衍生分組規則）；正式部署請下載新的 config.js。');
   });
+  if ($('btnLoadAuto')) $('btnLoadAuto').addEventListener('click', function () {
+    var preset = (baseConfig().presets && baseConfig().presets.auto);
+    if (!preset) { alert('config.js 尚未內含汽車零件範本，請確認已更新到通用版 v3 config.js。'); return; }
+    loadPreset(preset, '已載入汽車零件重要客戶範本到本機測試（含相依修正與評分開關、5 構面 × 16 因子、相依關係）；正式部署請下載新的 config.js。');
+    if (preset.scoringExample) { try { localStorage.setItem('ahp_scoring_v3', JSON.stringify({ customers: preset.scoringExample })); } catch (e) {} }
+    renderScoringEditor(); $('settingsMsg').textContent = '已載入汽車零件範本（含範例評分 A／B／C，請在「方案／客戶評分」頁確認後再改成自己的客戶）；正式部署請下載新的 config.js。';
+  });
   $('btnSaveSettingsLocal').addEventListener('click', function () {
     var cfg = readSettingsEditor();
     try { localStorage.setItem('ahp_config_override', JSON.stringify(cfg)); } catch (e) {}
-    renderFill(); renderSettingsEditor(); renderReportSchemes(); $('settingsMsg').textContent = '已存到本機測試（填答頁已更新）。正式部署仍需下載 config.js。';
+    renderFill(); renderSettingsEditor(); renderReportSchemes(); renderScoringEditor(); $('settingsMsg').textContent = '已存到本機測試（填答頁已更新）。正式部署仍需下載 config.js。';
   });
   $('btnDownloadConfig').addEventListener('click', function () {
     var cfg = readSettingsEditor(), base = baseConfig();
@@ -792,6 +1087,8 @@
       + '  groupOptions: ' + JSON.stringify(cfg.groupOptions) + ',\n'
       + '  backgroundFields: ' + JSON.stringify(cfg.backgroundFields) + ',\n'
       + '  groupingRules: ' + JSON.stringify(cfg.groupingRules || {}) + ',\n'
+      + '  features: ' + JSON.stringify(cfg.features || { dependency: false, scoring: false }) + ',\n'
+      + '  dependencies: ' + JSON.stringify(cfg.dependencies || []) + ',\n'
       + '  dimensions: ' + JSON.stringify(cfg.dimensions) + ',\n'
       + '  genericDimensions: ' + JSON.stringify(base.genericDimensions) + ',\n'
       + '  presets: ' + JSON.stringify(base.presets || {}) + '\n};\n';
@@ -810,7 +1107,7 @@
     btn.addEventListener('click', function () {
       document.querySelectorAll('[data-atab]').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      ['records', 'report', 'settings'].forEach(function (t) { $('atab-' + t).hidden = (t !== btn.getAttribute('data-atab')); });
+      ['records', 'report', 'scoring', 'settings'].forEach(function (t) { if ($('atab-' + t)) $('atab-' + t).hidden = (t !== btn.getAttribute('data-atab')); });
     });
   });
   $('btnAdminUnlock').addEventListener('click', function () {
@@ -819,7 +1116,7 @@
       $('adminLock').hidden = true; $('adminBody').hidden = false;
       $('adminWarn').innerHTML = base.adminCode === '請改成自己的後台密碼'
         ? '<p class="warn">警告：你還在用預設後台密碼，請先到 config.js 改掉再正式發連結。</p>' : '';
-      renderSettingsEditor(); renderReportSchemes(); loadLocal();
+      renderSettingsEditor(); renderReportSchemes(); renderScoringEditor(); loadLocal();
     } else {
       $('adminLockMsg').textContent = '密碼不正確，請檢查 config.js 的 adminCode。';
     }
