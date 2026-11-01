@@ -24,7 +24,7 @@
 <h2>第一步：基本資料（匿名，僅供分組分析）</h2>
 <div class="grid">
 <div><label for="fCode">填答編號（可自填，例如 T01；留空由系統編號）</label><input id="fCode" type="text" placeholder="例如 T01"></div>
-<div><label id="fGroupLabel" for="fGroup">分組</label><select id="fGroup"></select></div>
+<div id="fGroupWrap"><label id="fGroupLabel" for="fGroup">分組</label><select id="fGroup"></select></div>
 </div>
 <div class="grid" id="fBackground"></div>
 <p class="muted small">提醒：請勿填寫姓名、電話、電子郵件等可識別個人的資料。本問卷只記錄上面這些分組欄位與成對比較值。</p>
@@ -82,7 +82,7 @@
 </div>
 
 <div id="atab-records">
-<p class="muted small">點「查看」可看該筆的 5 張矩陣、權重、C.I.／C.R.。下載的 raw data 包含原始成對比較值，可直接進 Excel、SPSS 或 R 再分析。</p>
+<p class="muted small">點「查看」可看該筆的各張矩陣、權重、C.I.／C.R.／C.R.H.。下載的 raw data 包含原始成對比較值，可直接進 Excel、SPSS 或 R 再分析。</p>
 <label>篩選</label>
 <div class="grid">
 <div><select id="recGroupFilter"></select></div>
@@ -102,6 +102,9 @@
 <label for="issuedCount">發放份數（可不填；填了才計算回收率，線上問卷通常留空）</label>
 <input id="issuedCount" type="number" min="0" placeholder="例如 30">
 <label><input id="onlyValid" type="checkbox" checked> 分析只納入有效問卷（C.R. ≦ 0.1，論文第四章做法）</label>
+<label>多人彙總方法：<span style="font-weight:normal"><input type="radio" name="aggMethod" value="arithmetic" checked> 算術平均（這兩篇論文做法） <input type="radio" name="aggMethod" value="geometric"> 幾何平均（先取幾何平均再正規化）</span></label>
+<label><input id="showCRH" type="checkbox"> 另列整體層級一致性 C.R.H.（門檻 &lt; 0.1，補充指標，不取代逐矩陣判定）</label>
+<div id="reportSchemes"></div>
 <div><button id="btnGenReport">產生分析報告</button><button id="btnPrintReport" class="secondary">列印／存成 PDF</button><button id="btnDownloadReport" class="secondary">下載報告 HTML</button></div>
 <div id="reportArea"></div>
 </div>
@@ -111,6 +114,7 @@
 <div id="settingsEditor"></div>
 <button id="btnLoadGeneric">載入通用範本（4 構面 × 4 指標）</button>
 <button id="btnLoadThesis">載入論文範本（特教資訊融入教學）</button>
+<button id="btnLoadSMT">載入 SMT 生產效率範本（含年資／職級衍生分組）</button>
 <button id="btnSaveSettingsLocal" class="secondary">只存到本機測試</button>
 <button id="btnDownloadConfig">下載新的 config.js</button>
 <div id="settingsMsg" class="small muted"></div>
@@ -133,13 +137,13 @@
 <p class="warn"><b>安全提醒：</b>後台密碼寫在 config.js 裡，懂程式的人看得到原始碼，所以它只是防誤觸的門檻。請一律匿名填答、不要收姓名電話；需要刪除 Sheet 資料時，須另外在 Apps Script 指令碼屬性設定與後台密碼同值的 ADMIN_CODE，否則刪除會被拒絕。</p>
 <h3>Sheet 會長什麼樣子？</h3>
 <ul>
-<li><b>填答原始資料：</b>一列一筆，含編號、時間、分組、背景、30 組成對比較原始值，最後一欄 <code>comparisons_json</code> 是完整比較值 JSON（供後台從 Sheet 讀回重算）。</li>
+<li><b>填答原始資料：</b>一列一筆，含編號、時間、分組、背景、全部成對比較原始值（題數依目前架構自動計算），最後一欄 <code>comparisons_json</code> 是完整比較值 JSON（供後台從 Sheet 讀回重算）。</li>
 <li><b>個人權重結果：</b>一列一筆，含主構面權重、各構面區域權重、全域權重、C.I.／C.R. 與是否有效，方便直接貼進論文表格。</li>
 </ul>
 </div>
 </section>
 </main>
-<footer>計算方法：主特徵向量法，λmax、C.I.＝(λmax−n)/(n−1)、C.R.＝C.I.／R.I.，R.I. 採 Saaty 表（n=4 為 0.90）；多人彙總採論文第四章做法：先算個人權重再取算術平均，全域權重＝主構面平均 × 區域平均。</footer>
+<footer>計算方法：主特徵向量法，λmax、C.I.＝(λmax−n)/(n−1)、C.R.＝C.I.／R.I.，R.I. 採 Saaty 表（n=4 為 0.90）；多人彙總預設為論文第四章做法（先算個人權重再取算術平均），報告頁可改選幾何平均；全域權重＝主構面平均 × 區域平均；可選列整體層級一致性 C.R.H.。</footer>
 <script src="config.js"></script>
 <script src="assets/ahp.js"></script>
 <script src="assets/app.js"></script>

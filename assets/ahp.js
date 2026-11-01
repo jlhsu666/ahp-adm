@@ -71,6 +71,29 @@
     return r;
   }
 
+  // 整體層級一致性 C.R.H.（論文第三章做法，定義見 README）：
+  // C.I.H. = C.I.(主構面) + Σ 主構面權重 × C.I.(該構面子構面矩陣)
+  // R.I.H. = R.I.(主構面) + Σ 主構面權重 × R.I.(該構面子構面矩陣)
+  // C.R.H. = C.I.H. / R.I.H.；論文門檻為 C.R.H. < 0.1（補充指標，不取代逐矩陣 C.R. ≦ 0.1 的有效判定）。
+  function computeCRH(result) {
+    var cih = result.main.ci, rih = riFor(result.main.weights.length);
+    result.subs.forEach(function (s, di) {
+      cih += result.main.weights[di] * s.ci;
+      rih += result.main.weights[di] * riFor(s.weights.length);
+    });
+    var crh = rih === 0 ? 0 : cih / rih;
+    return { cih: cih, rih: rih, crh: crh, validCRH: crh < 0.1 };
+  }
+
+  function geoMean(arr) {
+    var s = 0; for (var i = 0; i < arr.length; i++) s += Math.log(arr[i] > 0 ? arr[i] : 1e-12);
+    return Math.exp(s / arr.length);
+  }
+  function normalize(arr) {
+    var s = 0; for (var i = 0; i < arr.length; i++) s += arr[i];
+    return arr.map(function (v) { return s ? v / s : 0; });
+  }
+
   // structure: { dimensions: [{ name, items: [name, ...] }, ...] }
   // record.comparisons: { main: {...}, "sub0": {...}, "sub1": {...} }
   function computeRecord(structure, record) {
@@ -80,6 +103,7 @@
       return analyseMatrix(dim.items.length, record.comparisons && record.comparisons['sub' + di]);
     });
     var valid = main.valid && subs.every(function (s) { return s.valid; });
+    var crh = computeCRH({ main: main, subs: subs });
     var global = [];
     dims.forEach(function (dim, di) {
       dim.items.forEach(function (item, ii) {
@@ -92,7 +116,7 @@
         });
       });
     });
-    return { main: main, subs: subs, global: global, valid: valid };
+    return { main: main, subs: subs, global: global, valid: valid, crh: crh };
   }
 
   function mean(arr) {
@@ -110,16 +134,17 @@
     return ranks;
   }
 
-  function aggregate(structure, recordsWithResults) {
+  function aggregate(structure, recordsWithResults, method) {
     // recordsWithResults: [{ record, result }]，已先篩選（例如只留有效問卷）。
     var dims = structure.dimensions;
-    var mainAvg = dims.map(function (_, di) {
-      return mean(recordsWithResults.map(function (r) { return r.result.main.weights[di]; }));
-    });
+    var aggFn = (method === 'geometric') ? geoMean : mean;
+    var mainAvg = normalize(dims.map(function (_, di) {
+      return aggFn(recordsWithResults.map(function (r) { return r.result.main.weights[di]; }));
+    }));
     var subAvg = dims.map(function (dim, di) {
-      return dim.items.map(function (_, ii) {
-        return mean(recordsWithResults.map(function (r) { return r.result.subs[di].weights[ii]; }));
-      });
+      return normalize(dim.items.map(function (_, ii) {
+        return aggFn(recordsWithResults.map(function (r) { return r.result.subs[di].weights[ii]; }));
+      }));
     });
     var globalList = [];
     dims.forEach(function (dim, di) {
@@ -161,7 +186,7 @@
   var api = { RI: RI, riFor: riFor, matrixFromComparisons: matrixFromComparisons,
     principalEigenvector: principalEigenvector, analyseMatrix: analyseMatrix,
     computeRecord: computeRecord, aggregate: aggregate, rankOf: rankOf,
-    comparisonsFromWeights: comparisonsFromWeights };
+    comparisonsFromWeights: comparisonsFromWeights, computeCRH: computeCRH, geoMean: geoMean, normalize: normalize };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.AHP = api;
 })(typeof window !== 'undefined' ? window : globalThis);
