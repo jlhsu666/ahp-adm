@@ -6,7 +6,7 @@
 研究標題：應用AHP探討國小教師使用教學互動資訊系統之關鍵因素 — 以HiTeach系統為例
 研究副標題：層級分析法（AHP）問卷
 後台密碼：123456
-Apps Script 網址：https://script.google.com/macros/s/AKfycbwBjr_Ue4dvMUvJbtQUC_8AIHeAtxG30wLtJNOnH-kN6B33cJjoL19b_polNhYUe9NIKA/exec
+Apps Script 網址：
 主要分組：任教班別
 分組選項：科任教師, 導師
 相依修正：關

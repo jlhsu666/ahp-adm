@@ -389,6 +389,8 @@
     return h;
   }
   function weightsRowFor(record, result) {
+    // 防呆：呼叫端漏傳 result 時就地重算，不可再讓送出在組 payload 時拋錯卡住
+    result = result || AHP.computeRecord(record.structure, record);
     var dims = record.structure.dimensions, row = [record.id, record.submitted_at, record.group, result.valid ? '有效' : '無效', fmt(result.main.ci), fmt(result.main.cr)];
     dims.forEach(function (_, di) { row.push(fmt(result.main.weights[di])); });
     dims.forEach(function (d, di) {
@@ -426,14 +428,28 @@
       $('btnSubmit').disabled = true; $('submitStatus').textContent = '';
     }
     if (cfg.appsScriptUrl) {
-      var payload = { action: 'submit', record: record, rawHeaders: rawHeadersFor(record), rawRow: rawRowFor(record), weightHeaders: weightsHeadersFor(record), weightRow: weightsRowFor(record) };
-      fetch(cfg.appsScriptUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) })
-        .then(function (r) { return r.json(); })
+      var payload;
+      try {
+        payload = { action: 'submit', record: record, rawHeaders: rawHeadersFor(record), rawRow: rawRowFor(record), weightHeaders: weightsHeadersFor(record), weightRow: weightsRowFor(record, result) };
+      } catch (e) {
+        doneLocal('送出過程發生錯誤（' + (e && e.message ? e.message : '未知錯誤') + '），已先存在本機；請把填答 JSON 寄給研究者彙整。');
+        return;
+      }
+      // 送出逾時保護：60 秒無回應就視為失敗，改存本機並提示，不再無限卡「送出中…」
+      var controller = null, timer = null;
+      if (typeof AbortController !== 'undefined') {
+        controller = new AbortController();
+        timer = setTimeout(function () { try { controller.abort(); } catch (e2) {} }, 60000);
+      }
+      var fetchOpts = { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) };
+      if (controller) fetchOpts.signal = controller.signal;
+      fetch(cfg.appsScriptUrl, fetchOpts)
+        .then(function (r) { if (timer) clearTimeout(timer); return r.json(); })
         .then(function (j) {
           if (j && j.ok) { $('fillDone').innerHTML = '<div class="card"><h3>已送出並寫入 Google Sheets</h3><p>您的編號：<b>' + esc(record.id) + '</b>。一致性：' + (result.valid ? '<span class="ok">有效</span>' : '<span class="bad">未通過</span>') + '</p></div>'; $('btnSubmit').disabled = true; $('submitStatus').textContent = ''; }
           else doneLocal('Sheet 寫入回傳異常，已先存在本機；請把下方 JSON 寄給研究者，或請研究者檢查 Apps Script 部署。');
         })
-        .catch(function () { doneLocal('Sheet 寫入失敗（可能是 Apps Script 網址或權限問題），已先存在本機；請把填答 JSON 寄給研究者彙整，並請研究者檢查部署設定。'); });
+        .catch(function () { if (timer) clearTimeout(timer); doneLocal('Sheet 寫入失敗或逾時（可能是 Apps Script 網址、權限或網路問題），已先存在本機；請把填答 JSON 寄給研究者彙整，並請研究者檢查部署設定。'); });
     } else {
       doneLocal('目前是本機模式，未接 Google Sheets；這筆資料存在這台瀏覽器。如需交給研究者，請下載填答 JSON 寄出。');
     }
