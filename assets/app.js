@@ -770,7 +770,6 @@
   }
   function generateReport() {
     var onlyValid = $('onlyValid').checked;
-    var issued = parseInt($('issuedCount').value, 10);
     var aggMethod = 'arithmetic';
     document.querySelectorAll('input[name="aggMethod"]').forEach(function (r) { if (r.checked) aggMethod = r.value; });
     var methodLabel = aggMethod === 'geometric' ? '幾何平均（先取幾何平均再正規化）' : '算術平均';
@@ -792,18 +791,7 @@
       + (showCRH ? '本報告另列整體層級一致性 C.R.H.（C.I.H.／R.I.H.，門檻 &lt; 0.1，僅供參考，不取代逐矩陣 C.R. 判定）。' : '')
       + '數值四捨五入至小數第三位，加總可能差 0.001；有效判定以未四捨五入值計算。</p>';
     if (diffCount) h += '<p class="warn">注意：有 ' + diffCount + ' 筆的研究架構與多數筆數不同，已排除在本次分析外（研究架構改變後，舊架構資料不應與新架構混算）。</p>';
-    h += '<h3>樣本總覽</h3><table>';
-    h += '<tr><th>項目</th><th class="num">份數</th></tr>';
-    h += '<tr><td>回收份數（目前資料來源總筆數）</td><td class="num">' + all.length + '</td></tr>';
-    if (!isNaN(issued) && issued > 0) h += '<tr><td>發放份數</td><td class="num">' + issued + '</td></tr><tr><td>回收率</td><td class="num">' + fmt(all.length / issued * 100, 1) + '%</td></tr>';
-    h += '<tr><td>有效問卷（全部矩陣 C.R. ≦ 0.1）</td><td class="num">' + validAll.length + '</td></tr>';
-    h += '<tr><td>無效問卷</td><td class="num">' + (same.length - validAll.length) + '</td></tr>';
-    h += '<tr><td>本次分析納入份數' + (onlyValid ? '（只納入有效）' : '（納入全部）') + '</td><td class="num">' + analysed.length + '</td></tr>';
-    if (showCRH) {
-      var crhPass = same.filter(function (x) { var c = x.result.crh || AHP.computeCRH(x.result); return c.crh < 0.1; }).length;
-      h += '<tr><td>整體層級一致性 C.R.H. &lt; 0.1 的問卷（補充指標）</td><td class="num">' + crhPass + '</td></tr>';
-    }
-    h += '</table>';
+    h += '<h3>樣本總覽</h3>';
     var invalidList = same.filter(function (x) { return !x.result.valid; });
     h += '<h4>無效問卷清單</h4>';
     if (!invalidList.length) h += '<p>無。</p>';
@@ -975,9 +963,9 @@
       var rowCount = tbl.querySelectorAll('tr').length - 1;
       var hasCRH = false;
       if (tbl.querySelectorAll('tr')[0]) tbl.querySelectorAll('tr')[0].querySelectorAll('th,td').forEach(function (c) { if (wordCleanText(c).indexOf('C.R.H.') >= 0) hasCRH = true; });
-      if (lastH3 === '樣本總覽') return '基本資料分析表';
       if (lastH4 === '無效問卷清單') return '無效問卷清單';
       if (lastH4.indexOf('分組與背景分布') >= 0) return '分組與背景分布';
+      if (lastH3 === '樣本總覽') return '基本資料分析表';
       if (lastH4.indexOf('之下子構面') >= 0) {
         var dim = lastH4.replace('之下子構面', '');
         return dim + '之下' + (headerCount - 3) + '個子構面分析結果—' + currentGroup;
