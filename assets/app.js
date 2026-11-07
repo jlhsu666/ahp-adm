@@ -1332,8 +1332,8 @@
     var base = baseConfig();
     if ($('adminCodeInput').value === base.adminCode) {
       $('adminLock').hidden = true; $('adminBody').hidden = false;
-      $('adminWarn').innerHTML = base.adminCode === '請改成自己的後台密碼'
-        ? '<p class="warn">警告：你還在用預設後台密碼，請先到 config.js 改掉再正式發連結。</p>' : '';
+      $('adminWarn').innerHTML = base.adminCode === '123456'
+        ? '<p class="warn">警告：你還在用預設後台密碼 123456，請先改成自己的密碼再正式發連結。</p>' : '';
       renderSettingsEditor(); renderReportSchemes(); renderScoringEditor(); loadLocal();
     } else {
       $('adminLockMsg').textContent = '密碼不正確，請檢查題目檔的後台密碼（預設研究請檢查 config.js 的 adminCode）。';

@@ -27,7 +27,7 @@
     '相依修正': 'dependency', 'dependency': 'dependency',
     '方案評分': 'scoring', 'scoring': 'scoring'
   };
-  var DEFAULT_PASSWORD = '請改成自己的後台密碼';
+  var DEFAULT_PASSWORD = '123456';
 
   function splitList(s) {
     return String(s).split(/[,，]/).map(function (x) { return x.trim(); }).filter(Boolean);
