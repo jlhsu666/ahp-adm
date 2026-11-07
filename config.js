@@ -12,7 +12,7 @@ window.AHP_CONFIG = {
   appsScriptUrl: '',
   // 後台簡易密碼。研究者請改成自己的密碼；Apps Script 的刪除保護
   // 要另外在 Apps Script「專案設定 > 指令碼屬性」設定同值的 ADMIN_CODE。
-  adminCode: '請改成自己的後台密碼',
+  adminCode: '1234',
   // 分組欄位：論文是「任教班別」。研究者可改成自己的分組，例如年級、科別。
   groupLabel: '任教班別',
   groupOptions: ['集中式特教班', '不分類資源班'],
