@@ -18,7 +18,7 @@ window.AHP_CONFIG = {
   studyTitle: '特教教師使用資訊科技融入教學之考量因素',
   studySubtitle: '層級分析法（AHP）問卷',
   appsScriptUrl: '',
-  adminCode: '請改成自己的後台密碼',
+  adminCode: '1234',
   groupLabel: '任教班別',
   groupOptions: ['集中式特教班', '不分類資源班'],
   groupingRules: {},
