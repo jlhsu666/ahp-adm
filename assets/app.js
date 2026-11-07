@@ -641,12 +641,6 @@
     var order = weights.map(function (w, i) { return { w: w, i: i }; }).sort(function (a, b) { return b.w - a.w; });
     return order.map(function (o, idx) { return '第' + (idx + 1) + '為「' + names[o.i] + '」（' + fmt(o.w) + '）'; }).join('，') + '。';
   }
-  function failedMatrices(x) {
-    var dims = x.record.structure.dimensions, fails = [];
-    if (!x.result.main.valid) fails.push('主構面（C.R. ' + fmt(x.result.main.cr) + '）');
-    x.result.subs.forEach(function (s, di) { if (!s.valid) fails.push(dims[di].name + '（C.R. ' + fmt(s.cr) + '）'); });
-    return fails;
-  }
   function groupSectionHTML(title, list, agg, structure, opts) {
     opts = opts || {};
     var methodLabel = opts.methodLabel || '算術平均';
@@ -792,10 +786,6 @@
       + '數值四捨五入至小數第三位，加總可能差 0.001；有效判定以未四捨五入值計算。</p>';
     if (diffCount) h += '<p class="warn">注意：有 ' + diffCount + ' 筆的研究架構與多數筆數不同，已排除在本次分析外（研究架構改變後，舊架構資料不應與新架構混算）。</p>';
     h += '<h3>樣本總覽</h3>';
-    var invalidList = same.filter(function (x) { return !x.result.valid; });
-    h += '<h4>無效問卷清單</h4>';
-    if (!invalidList.length) h += '<p>無。</p>';
-    else h += '<table><tr><th>編號</th><th>分組</th><th>未通過的矩陣</th></tr>' + invalidList.map(function (x) { return '<tr><td>' + esc(x.record.id) + '</td><td>' + esc(x.record.group) + '</td><td>' + esc(failedMatrices(x).join('、')) + '</td></tr>'; }).join('') + '</table>';
     h += '<h4>分組與背景分布（以全部回收問卷計）</h4><table><tr><th>分組</th><th class="num">人數</th></tr>' + (function () {
       var counts = {};
       same.forEach(function (x) { counts[x.record.group] = (counts[x.record.group] || 0) + 1; });
@@ -963,7 +953,6 @@
       var rowCount = tbl.querySelectorAll('tr').length - 1;
       var hasCRH = false;
       if (tbl.querySelectorAll('tr')[0]) tbl.querySelectorAll('tr')[0].querySelectorAll('th,td').forEach(function (c) { if (wordCleanText(c).indexOf('C.R.H.') >= 0) hasCRH = true; });
-      if (lastH4 === '無效問卷清單') return '無效問卷清單';
       if (lastH4.indexOf('分組與背景分布') >= 0) return '分組與背景分布';
       if (lastH3 === '樣本總覽') return '基本資料分析表';
       if (lastH4.indexOf('之下子構面') >= 0) {
