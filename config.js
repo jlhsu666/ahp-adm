@@ -18,9 +18,20 @@ window.AHP_CONFIG = {
   studyTitle: '特教教師使用資訊科技融入教學之考量因素',
   studySubtitle: '層級分析法（AHP）問卷',
   appsScriptUrl: '',
-  adminCode: '1234',
+  adminCode: '請改成自己的後台密碼',
   groupLabel: '任教班別',
   groupOptions: ['集中式特教班', '不分類資源班'],
+  // 多研究註冊表（v3.5）：研究代號 → 題目檔。問卷連結用 ?s=代號，
+  // 例如 https://ahp-adm.pages.dev/?s=smt。題目檔是純文字（.txt），
+  // 格式見 studies/template.txt；後台密碼、Apps Script 網址都寫在
+  // 題目檔裡，跟著題目走。題目檔可放 studies/ 資料夾，或任何允許
+  // 跨網域讀取（CORS）的網址；Google 雲端硬碟分享連結讀不到。
+  // 沒帶 ?s= 時開預設研究（就是下面這份設定），行為不變。
+  studies: {
+    'special-edu': { url: 'studies/special-edu.txt', title: '特教教師資訊融入教學' },
+    'smt': { url: 'studies/smt.txt', title: 'SMT 生產效率' },
+    'auto-parts': { url: 'studies/auto-parts.txt', title: '汽車零件重要客戶' }
+  },
   groupingRules: {},
   features: { dependency: false, scoring: false },
   dependencies: [],

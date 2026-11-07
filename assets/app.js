@@ -7,10 +7,19 @@
   function $ (id) { return document.getElementById(id); }
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
-  function baseConfig() { return window.AHP_CONFIG || { dimensions: [] }; }
+  // 多研究：?s=代號（config.js studies 註冊表）或 ?config=題目檔網址
+  // 載入後 studyConfig 取代 config.js 的單一研究；fileConfig() 永遠是
+  // config.js 的檔案設定（範本按鈕、匯出用的 genericDimensions／presets／studies）。
+  var studyConfig = null;
+  var studyId = 'default';
+  function fileConfig() { return window.AHP_CONFIG || { dimensions: [] }; }
+  function baseConfig() { return studyConfig || fileConfig(); }
+  // 本機儲存按研究分開：預設研究沿用舊鍵（相容 v3.4 以前資料），
+  // 其他研究用「鍵__代號」，同一台瀏覽器切換研究不會混到。
+  function storeKey(name) { return studyId === 'default' ? name : name + '__' + studyId; }
   function activeConfig() {
     try {
-      var ov = localStorage.getItem('ahp_config_override');
+      var ov = localStorage.getItem(storeKey('ahp_config_override'));
       if (ov) {
         var o = JSON.parse(ov);
         var b = baseConfig();
@@ -392,8 +401,8 @@
     $('submitStatus').textContent = '送出中…';
     function doneLocal(msg) {
       try {
-        var arr = JSON.parse(localStorage.getItem('ahp_records') || '[]');
-        arr.push(record); localStorage.setItem('ahp_records', JSON.stringify(arr));
+        var arr = JSON.parse(localStorage.getItem(storeKey('ahp_records')) || '[]');
+        arr.push(record); localStorage.setItem(storeKey('ahp_records'), JSON.stringify(arr));
       } catch (e) {}
       $('fillDone').innerHTML = '<div class="card"><h3>已送出</h3><p>您的編號：<b>' + esc(record.id) + '</b>。一致性：' + (result.valid ? '<span class="ok">有效</span>' : '<span class="bad">未通過（後台分析預設排除）</span>') + '</p><p>' + esc(msg) + '</p>'
         + '<button class="secondary" id="btnMyJson">下載我的填答 JSON（可寄給研究者彙整）</button></div>';
@@ -418,7 +427,7 @@
   var currentRecords = [], currentSource = 'local';
   function computeAll(records) { return records.map(function (r) { return { record: r, result: AHP.computeRecord(r.structure, r) }; }); }
   function loadLocal() {
-    try { currentRecords = JSON.parse(localStorage.getItem('ahp_records') || '[]'); } catch (e) { currentRecords = []; }
+    try { currentRecords = JSON.parse(localStorage.getItem(storeKey('ahp_records')) || '[]'); } catch (e) { currentRecords = []; }
     currentSource = 'local';
     $('srcHint').textContent = '本機紀錄存在這台瀏覽器的 localStorage；換台電腦就看不到，正式收案請用 Google Sheets 來源。';
     $('srcControls').innerHTML = '<p class="small">本機共 ' + currentRecords.length + ' 筆。</p>';
@@ -543,7 +552,7 @@
             .catch(function () { alert('刪除請求失敗，請檢查 Apps Script。'); });
         } else {
           currentRecords = currentRecords.filter(function (r) { return String(r.id) !== id; });
-          try { localStorage.setItem('ahp_records', JSON.stringify(currentRecords)); } catch (e) {}
+          try { localStorage.setItem(storeKey('ahp_records'), JSON.stringify(currentRecords)); } catch (e) {}
           renderRecords();
         }
       });
@@ -570,7 +579,7 @@
   $('btnJson').addEventListener('click', function () { downloadCurrentCSV('json'); });
   $('btnClearLocal').addEventListener('click', function () {
     if (!confirm('確定清除本機所有填答紀錄嗎？此動作無法復原，Sheets 上的資料不受影響。')) return;
-    try { localStorage.removeItem('ahp_records'); } catch (e) {}
+    try { localStorage.removeItem(storeKey('ahp_records')); } catch (e) {}
     loadLocal();
   });
 
@@ -1061,7 +1070,7 @@
 
   // ---------- 後台：方案／客戶評分（僅開啟評分功能時使用；資料只存在本機瀏覽器） ----------
   function loadScoring() {
-    try { var v = JSON.parse(localStorage.getItem('ahp_scoring_v3') || 'null'); if (v && v.customers) return v.customers; } catch (e) {}
+    try { var v = JSON.parse(localStorage.getItem(storeKey('ahp_scoring_v3')) || 'null'); if (v && v.customers) return v.customers; } catch (e) {}
     return [];
   }
   function readScoringEditor() {
@@ -1103,7 +1112,7 @@
     $('btnAddScoringCust').addEventListener('click', function () { var cs = readScoringEditor(); cs.push({ name: '客戶' + String.fromCharCode(65 + cs.length), scores: {} }); renderScoringEditor(cs); });
     $('btnDelScoringCust').addEventListener('click', function () { var cs = readScoringEditor(); if (cs.length > 1) cs.pop(); renderScoringEditor(cs); });
     $('btnLoadScoringExample').addEventListener('click', function () {
-      var preset = (baseConfig().presets && baseConfig().presets.auto);
+      var preset = (fileConfig().presets && fileConfig().presets.auto);
       if (!preset || !preset.scoringExample) { alert('config.js 尚未內含範例評分。'); return; }
       var cur = activeConfig();
       var sameStruct = JSON.stringify(cur.dimensions.map(function (d) { return d.items; })) === JSON.stringify(preset.dimensions.map(function (d) { return d.items; }));
@@ -1114,7 +1123,7 @@
   }
   if ($('btnSaveScoring')) $('btnSaveScoring').addEventListener('click', function () {
     var cs = readScoringEditor();
-    try { localStorage.setItem('ahp_scoring_v3', JSON.stringify({ customers: cs })); } catch (e) {}
+    try { localStorage.setItem(storeKey('ahp_scoring_v3'), JSON.stringify({ customers: cs })); } catch (e) {}
     $('scoringMsg').textContent = '評分已儲存（本機瀏覽器）。產生報告時會一併列出評分結果。';
   });
 
@@ -1235,34 +1244,34 @@
   function loadPreset(preset, msg) {
     var cfg = clone(activeConfig());
     ['studyTitle', 'studySubtitle', 'groupLabel', 'groupOptions', 'backgroundFields', 'groupingRules', 'dimensions', 'features', 'dependencies'].forEach(function (k) { if (preset[k] !== undefined) cfg[k] = clone(preset[k]); });
-    try { localStorage.setItem('ahp_config_override', JSON.stringify(cfg)); } catch (e) {}
+    try { localStorage.setItem(storeKey('ahp_config_override'), JSON.stringify(cfg)); } catch (e) {}
     renderFill(); renderSettingsEditor(); renderReportSchemes(); $('settingsMsg').textContent = msg;
   }
   $('btnLoadGeneric').addEventListener('click', function () {
-    var cfg = clone(activeConfig()); cfg.dimensions = clone(baseConfig().genericDimensions); cfg.features = { dependency: false, scoring: false }; cfg.dependencies = [];
-    try { localStorage.setItem('ahp_config_override', JSON.stringify(cfg)); } catch (e) {}
+    var cfg = clone(activeConfig()); cfg.dimensions = clone(fileConfig().genericDimensions); cfg.features = { dependency: false, scoring: false }; cfg.dependencies = [];
+    try { localStorage.setItem(storeKey('ahp_config_override'), JSON.stringify(cfg)); } catch (e) {}
     renderFill(); renderSettingsEditor(); $('settingsMsg').textContent = '已載入通用範本到本機測試；正式部署請下載新的 config.js。';
   });
   $('btnLoadThesis').addEventListener('click', function () {
-    var cfg = clone(activeConfig()); cfg.dimensions = clone(baseConfig().dimensions); cfg.features = { dependency: false, scoring: false }; cfg.dependencies = [];
-    try { localStorage.setItem('ahp_config_override', JSON.stringify(cfg)); } catch (e) {}
+    var cfg = clone(activeConfig()); cfg.dimensions = clone(fileConfig().dimensions); cfg.features = { dependency: false, scoring: false }; cfg.dependencies = [];
+    try { localStorage.setItem(storeKey('ahp_config_override'), JSON.stringify(cfg)); } catch (e) {}
     renderFill(); renderSettingsEditor(); $('settingsMsg').textContent = '已載入論文範本（特教資訊融入教學）到本機測試。';
   });
   if ($('btnLoadSMT')) $('btnLoadSMT').addEventListener('click', function () {
-    var preset = (baseConfig().presets && baseConfig().presets.smt) || baseConfig().smtPreset;
+    var preset = (fileConfig().presets && fileConfig().presets.smt) || fileConfig().smtPreset;
     if (!preset) { alert('config.js 尚未內含 SMT 範本，請確認已更新到通用版 config.js。'); return; }
     loadPreset(preset, '已載入 SMT 生產效率範本到本機測試（含年資／職級衍生分組規則）；正式部署請下載新的 config.js。');
   });
   if ($('btnLoadAuto')) $('btnLoadAuto').addEventListener('click', function () {
-    var preset = (baseConfig().presets && baseConfig().presets.auto);
+    var preset = (fileConfig().presets && fileConfig().presets.auto);
     if (!preset) { alert('config.js 尚未內含汽車零件範本，請確認已更新到通用版 v3 config.js。'); return; }
     loadPreset(preset, '已載入汽車零件重要客戶範本到本機測試（含相依修正與評分開關、5 構面 × 16 因子、相依關係）；正式部署請下載新的 config.js。');
-    if (preset.scoringExample) { try { localStorage.setItem('ahp_scoring_v3', JSON.stringify({ customers: preset.scoringExample })); } catch (e) {} }
+    if (preset.scoringExample) { try { localStorage.setItem(storeKey('ahp_scoring_v3'), JSON.stringify({ customers: preset.scoringExample })); } catch (e) {} }
     renderScoringEditor(); $('settingsMsg').textContent = '已載入汽車零件範本（含範例評分 A／B／C，請在「方案／客戶評分」頁確認後再改成自己的客戶）；正式部署請下載新的 config.js。';
   });
   $('btnSaveSettingsLocal').addEventListener('click', function () {
     var cfg = readSettingsEditor();
-    try { localStorage.setItem('ahp_config_override', JSON.stringify(cfg)); } catch (e) {}
+    try { localStorage.setItem(storeKey('ahp_config_override'), JSON.stringify(cfg)); } catch (e) {}
     renderFill(); renderSettingsEditor(); renderReportSchemes(); renderScoringEditor(); $('settingsMsg').textContent = '已存到本機測試（填答頁已更新）。正式部署仍需下載 config.js。';
   });
   $('btnDownloadConfig').addEventListener('click', function () {
@@ -1279,8 +1288,9 @@
       + '  features: ' + JSON.stringify(cfg.features || { dependency: false, scoring: false }) + ',\n'
       + '  dependencies: ' + JSON.stringify(cfg.dependencies || []) + ',\n'
       + '  dimensions: ' + JSON.stringify(cfg.dimensions) + ',\n'
-      + '  genericDimensions: ' + JSON.stringify(base.genericDimensions) + ',\n'
-      + '  presets: ' + JSON.stringify(base.presets || {}) + '\n};\n';
+      + '  genericDimensions: ' + JSON.stringify(fileConfig().genericDimensions || []) + ',\n'
+      + '  presets: ' + JSON.stringify(fileConfig().presets || {}) + ',\n'
+      + '  studies: ' + JSON.stringify(fileConfig().studies || {}) + '\n};\n';
     download('config.js', text, 'text/javascript;charset=utf-8');
   });
 
@@ -1307,8 +1317,75 @@
         ? '<p class="warn">警告：你還在用預設後台密碼，請先到 config.js 改掉再正式發連結。</p>' : '';
       renderSettingsEditor(); renderReportSchemes(); renderScoringEditor(); loadLocal();
     } else {
-      $('adminLockMsg').textContent = '密碼不正確，請檢查 config.js 的 adminCode。';
+      $('adminLockMsg').textContent = '密碼不正確，請檢查題目檔的後台密碼（預設研究請檢查 config.js 的 adminCode）。';
     }
   });
-  renderFill();
+  // ---------- 多研究啟動：?s=代號 或 ?config=題目檔網址 ----------
+  // 無參數時走原本的預設研究（config.js），行為與 v3.4 完全相同。
+  function studyRegistry() { return fileConfig().studies || {}; }
+  function studyEntry(id) {
+    var e = studyRegistry()[id];
+    if (!e) return null;
+    if (typeof e === 'string') return { url: e, title: id };
+    return { url: e.url || '', title: e.title || id };
+  }
+  function showStudyError(msg) {
+    var list = Object.keys(studyRegistry()).map(function (id) {
+      var e = studyEntry(id);
+      return '<li><a href="?s=' + encodeURIComponent(id) + '">' + esc(e.title) + '</a>（?s=' + esc(id) + '）</li>';
+    }).join('');
+    $('view-fill').innerHTML = '<div class="card"><h2>這個研究連結打不開</h2><p>' + esc(msg) + '</p>'
+      + (list ? '<p>目前已登記的研究：</p><ul>' + list + '</ul>' : '<p>目前沒有登記任何研究，請回預設研究或檢查連結。</p>')
+      + '<p><a href="' + location.pathname + '">回預設研究</a></p></div>';
+    $('siteTitle').textContent = 'AHP 問卷與分析系統';
+  }
+  function renderStudyBar() {
+    var bar = $('studyBar'); if (!bar) return;
+    var ids = Object.keys(studyRegistry());
+    if (studyId === 'default' && !ids.length) { bar.hidden = true; return; }
+    var h = '';
+    if (studyId !== 'default') h += '目前研究：<b>' + esc(activeConfig().studyTitle || studyId) + '</b>';
+    if (ids.length) {
+      h += (h ? '　' : '') + '切換研究：' + ids.map(function (id) {
+        var e = studyEntry(id);
+        return '<a href="?s=' + encodeURIComponent(id) + '">' + esc(e.title) + '</a>';
+      }).join('、');
+    }
+    if (studyId !== 'default') h += '　<a href="' + location.pathname + '">回預設研究</a>';
+    bar.innerHTML = h; bar.hidden = false;
+  }
+  function bootStudy() {
+    var q = new URLSearchParams(window.location.search || '');
+    var sid = q.get('s') || '', cfgUrl = q.get('config') || '';
+    if (!sid && !cfgUrl) { renderFill(); renderStudyBar(); return; }
+    var entry = sid ? studyEntry(sid) : null;
+    var url = cfgUrl || (entry && entry.url) || '';
+    studyId = sid || ('ext-' + ((url.split('/').pop() || 'study').replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_') || 'study'));
+    if (!url) { showStudyError('找不到研究代號「' + sid + '」，請檢查連結是否正確，或請管理者確認 config.js 的 studies 註冊表。'); return; }
+    if (!window.StudyTxt || !window.StudyTxt.parse) { showStudyError('題目解析器（assets/studyTxt.js）未載入，請確認檔案存在且 index.html 有引用它。'); return; }
+    fetch(url).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    }).then(function (txt) {
+      var parsed = window.StudyTxt.parse(txt);
+      if (!parsed.ok) {
+        var detail = parsed.errors.map(function (e) { return (e.line ? '第 ' + e.line + ' 行：' : '') + e.message; }).join('；');
+        showStudyError('題目檔「' + url + '」格式有誤：' + detail + '。請對照 studies/template.txt 修正後重新推上 GitHub。');
+        return;
+      }
+      studyConfig = parsed.config;
+      // 範本與預設值沿用 config.js 的檔案設定（後台範本按鈕、匯出用）。
+      if (fileConfig().genericDimensions) studyConfig.genericDimensions = fileConfig().genericDimensions;
+      if (fileConfig().presets) studyConfig.presets = fileConfig().presets;
+      renderFill(); renderStudyBar();
+      if (parsed.warnings.length) {
+        var w = parsed.warnings.map(function (x) { return x.message; }).join('；');
+        var el = $('fillIntro');
+        if (el) el.insertAdjacentHTML('beforeend', '<p class="warn small">' + esc('提醒：' + w) + '</p>');
+      }
+    }).catch(function (err) {
+      showStudyError('讀不到題目檔「' + url + '」（' + (err && err.message ? err.message : '網路錯誤') + '）。若檔案在 GitHub，請確認已推上 repo 且網址正確；若是外部網址，請確認該站允許跨網域讀取（CORS）。');
+    });
+  }
+  bootStudy();
 })();
