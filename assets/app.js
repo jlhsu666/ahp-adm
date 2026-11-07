@@ -98,10 +98,10 @@
   }
   function sliderHTML(cls, attrs, values, isDep, scaleHint) {
     var mid = values.indexOf(0);
-    return '<div class="slider-row"><button type="button" class="slider-btn" data-step="-1" aria-label="往左一格">−</button>'
+    return '<div class="slider-row"><button type="button" class="slider-btn" data-step="-1" aria-label="往左一格">←</button>'
       + '<input type="range" class="' + cls + '" ' + attrs + ' min="0" max="' + (values.length - 1) + '" step="1" value="' + mid + '" data-answered="0" data-values="' + values.join(',') + '">'
-      + '<button type="button" class="slider-btn" data-step="1" aria-label="往右一格">＋</button></div>'
-      + '<div class="slider-big">尚未選擇，請拖動滑桿或按加減</div>'
+      + '<button type="button" class="slider-btn" data-step="1" aria-label="往右一格">→</button></div>'
+      + '<div class="slider-big">尚未選擇，請拖動滑桿或按左右箭頭</div>'
       + '<div class="scale">' + scaleHint + '</div>';
   }
   function refreshSlider(el) {
@@ -204,8 +204,7 @@
       if (dimDescText) h += '<p class="muted small">' + esc(dimDescText) + '</p>';
       pairs(names.length).forEach(function (p) {
         var d0 = (descs || [])[p[0]] || '', d1 = (descs || [])[p[1]] || '';
-        var descHtml = (d0 || d1) ? '<div class="small muted">左：' + esc(d0 || '（無定義）') + '<br>右：' + esc(d1 || '（無定義）') + '</div>' : '';
-        h += '<div class="pair"><div class="names">' + defTip(names[p[0]], d0) + defTipR(names[p[1]], d1) + '</div>' + descHtml
+        h += '<div class="pair"><div class="names">' + defTip(names[p[0]], d0) + defTipR(names[p[1]], d1) + '</div>'
           + sliderHTML('pair-select', 'data-matrix="' + key + '" data-pair="' + p[0] + '-' + p[1] + '"', SLIDER_VALUES_MAIN, false, '左方 9 … 1 同等 … 右方 9（滑桿偏左表示左項較重要，偏右表示右項較重要；中央為同等重要）') + '</div>';
       });
       return h;
@@ -452,7 +451,7 @@
   }
   function loadSheet() {
     var cfg = baseConfig();
-    if (!cfg.appsScriptUrl) { alert('config.js 尚未填寫 appsScriptUrl，請先依部署說明接好 Apps Script。'); return; }
+    if (!cfg.appsScriptUrl) { alert('config.js 尚未填寫 appsScriptUrl，請先依 README 的部署說明接好 Apps Script。'); return; }
     $('srcHint').textContent = '從 Google Sheets 讀取中…';
     fetch(cfg.appsScriptUrl + '?action=list')
       .then(function (r) { return r.json(); })
@@ -1319,7 +1318,7 @@
     btn.addEventListener('click', function () {
       document.querySelectorAll('[data-view]').forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      ['fill', 'admin', 'deploy'].forEach(function (v) { $('view-' + v).hidden = (v !== btn.getAttribute('data-view')); });
+      ['fill', 'admin'].forEach(function (v) { $('view-' + v).hidden = (v !== btn.getAttribute('data-view')); });
     });
   });
   document.querySelectorAll('[data-atab]').forEach(function (btn) {
