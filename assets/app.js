@@ -164,18 +164,31 @@
 
   // ---------- 填答 ----------
   var lastPreview = null, lastRecord = null;
+  // 問卷說明：空行分段，單一換行以 <br> 呈現；無說明時不顯示。
+  function introHTML(intro) {
+    if (!intro || !String(intro).trim()) return '';
+    var paras = String(intro).split(/\n\s*\n/).map(function (p) { return p.trim(); }).filter(Boolean);
+    return '<div class="intro">' + paras.map(function (p) { return '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>'; }).join('') + '</div>';
+  }
+  // 構面／指標名稱：有定義時滑鼠移上去顯示定義（手機上點按名稱亦可看；每題下方仍保留左／右定義）。
+  function defTip(name, def) {
+    if (!def) return esc(name);
+    return '<span class="def-tip" data-def="' + esc(def) + '">' + esc(name) + '</span>';
+  }
+  function defTipR(name, def) {
+    if (!def) return esc(name);
+    return '<span class="def-tip def-tip-r" data-def="' + esc(def) + '">' + esc(name) + '</span>';
+  }
   function renderFill() {
     var cfg = activeConfig();
     $('siteTitle').textContent = cfg.studyTitle || 'AHP 問卷與分析系統';
     $('siteSubtitle').textContent = cfg.studySubtitle || '';
     var dims = cfg.dimensions;
     $('fillIntro').innerHTML = '<h2>' + esc(cfg.studyTitle) + '</h2><p class="muted">' + esc(cfg.studySubtitle || '') + '</p>'
+      + introHTML(cfg.intro)
       + '<p>本問卷共 <b>' + dims.length + ' 個主構面</b>、<b>' + dims.reduce(function (s, d) { return s + d.items.length; }, 0) + ' 個子構面</b>，'
       + '成對比較共 <b>' + (pairs(dims.length).length + dims.reduce(function (s, d) { return s + pairs(d.items.length).length; }, 0)) + ' 題</b>。'
-      + '請依您的判斷逐題比較，填完可先看個人結果再送出。</p>'
-      + '<div id="modeHint"></div>';
-    var mode = cfg.appsScriptUrl ? '已接 Google Sheets：送出後會寫入研究者的試算表。' : '目前是本機模式（config.js 未填 Apps Script 網址）：送出後只存在這台瀏覽器，正式收案前請研究者先接好 Sheets 再發連結。';
-    $('modeHint').innerHTML = '<p class="warn">' + mode + '</p>';
+      + '請依您的判斷逐題比較，填完可先看個人結果再送出。</p>';
     if ($('fGroupWrap')) $('fGroupWrap').hidden = !cfg.groupLabel;
     $('fGroupLabel').textContent = cfg.groupLabel || '分組';
     $('fGroup').innerHTML = (cfg.groupOptions || []).map(function (g) { return '<option>' + esc(g) + '</option>'; }).join('');
@@ -185,12 +198,14 @@
     }).join('');
     var html = '';
     function matrixBlock(key, title, names, descs, dimDescText) {
-      var h = '<h3>' + esc(title) + '</h3>';
+      var h = dimDescText
+        ? '<h3 class="def-tip" data-def="' + esc(dimDescText) + '">' + esc(title) + '</h3>'
+        : '<h3>' + esc(title) + '</h3>';
       if (dimDescText) h += '<p class="muted small">' + esc(dimDescText) + '</p>';
       pairs(names.length).forEach(function (p) {
         var d0 = (descs || [])[p[0]] || '', d1 = (descs || [])[p[1]] || '';
         var descHtml = (d0 || d1) ? '<div class="small muted">左：' + esc(d0 || '（無定義）') + '<br>右：' + esc(d1 || '（無定義）') + '</div>' : '';
-        h += '<div class="pair"><div class="names"><span>' + esc(names[p[0]]) + '</span><span>' + esc(names[p[1]]) + '</span></div>' + descHtml
+        h += '<div class="pair"><div class="names">' + defTip(names[p[0]], d0) + defTipR(names[p[1]], d1) + '</div>' + descHtml
           + sliderHTML('pair-select', 'data-matrix="' + key + '" data-pair="' + p[0] + '-' + p[1] + '"', SLIDER_VALUES_MAIN, false, '左方 9 … 1 同等 … 右方 9（滑桿偏左表示左項較重要，偏右表示右項較重要；中央為同等重要）') + '</div>';
       });
       return h;
@@ -212,9 +227,11 @@
           if (!dim) return;
           var names = (entry.items || []).map(function (ii) { return dim.items[ii]; });
           var baseName = dim.items[entry.baseItemIndex];
-          dh += '<h3>' + esc(dim.name) + ' — 以「' + esc(baseName) + '」為基準</h3>';
+          var baseDesc = (dim.itemDescs || [])[entry.baseItemIndex] || '';
+          dh += '<h3>' + defTip(dim.name, dimDesc(dim)) + ' — 以「' + defTip(baseName, baseDesc) + '」為基準</h3>';
           pairs(names.length).forEach(function (p) {
-            dh += '<div class="pair"><div class="names"><span>' + esc(names[p[0]]) + '</span><span>' + esc(names[p[1]]) + '</span></div>'
+            var dd0 = (dim.itemDescs || [])[entry.items[p[0]]] || '', dd1 = (dim.itemDescs || [])[entry.items[p[1]]] || '';
+            dh += '<div class="pair"><div class="names">' + defTip(names[p[0]], dd0) + defTipR(names[p[1]], dd1) + '</div>'
               + sliderHTML('dep-select', 'data-dep="' + ei + '" data-pair="' + p[0] + '-' + p[1] + '"', SLIDER_VALUES_DEP, true, '左方影響較強 9 … 1 影響相等 … 右方影響較強 9（不使用中間值）') + '</div>';
           });
         });
@@ -1132,6 +1149,7 @@
     var cfg = draft || activeConfig();
     var h = '<label>研究標題</label><input id="setTitle" type="text" value="' + esc(cfg.studyTitle) + '">';
     h += '<label>副標題</label><input id="setSubtitle" type="text" value="' + esc(cfg.studySubtitle || '') + '">';
+    h += '<label>問卷說明（填答頁顯示在標題下方，多行；留空不顯示）</label><textarea id="setIntro">' + esc(cfg.intro || '') + '</textarea>';
     var feats0 = featuresOf(cfg);
     h += '<h3>功能開關（依研究主題開啟；預設全關，行為與 v2 相同）</h3>'
       + '<label style="font-weight:normal"><input type="checkbox" id="setFeatureDep"' + (feats0.dependency ? ' checked' : '') + '> 開啟相依修正（關聯性 AHP 第二階段：因子間影響力比較＋矩陣乘積修正）</label>'
@@ -1198,6 +1216,7 @@
   function readSettingsEditor() {
     var cfg = clone(activeConfig());
     cfg.studyTitle = $('setTitle').value; cfg.studySubtitle = $('setSubtitle').value;
+    cfg.intro = $('setIntro') ? $('setIntro').value : (cfg.intro || '');
     cfg.features = { dependency: !!($('setFeatureDep') && $('setFeatureDep').checked), scoring: !!($('setFeatureScoring') && $('setFeatureScoring').checked) };
     cfg.dependencies = [];
     document.querySelectorAll('[data-deprow]').forEach(function (row) {
@@ -1279,6 +1298,7 @@
     var text = '// 研究者部署設定（由後台「研究設定」匯出，請覆蓋 repo 根目錄的 config.js 後重新部署）\nwindow.AHP_CONFIG = {\n'
       + '  studyTitle: ' + JSON.stringify(cfg.studyTitle) + ',\n'
       + '  studySubtitle: ' + JSON.stringify(cfg.studySubtitle) + ',\n'
+      + '  intro: ' + JSON.stringify(cfg.intro || '') + ',\n'
       + '  appsScriptUrl: ' + JSON.stringify(base.appsScriptUrl || '') + ',\n'
       + '  adminCode: ' + JSON.stringify(base.adminCode) + ',\n'
       + '  groupLabel: ' + JSON.stringify(cfg.groupLabel) + ',\n'
@@ -1339,25 +1359,10 @@
       + '<p><a href="' + location.pathname + '">回預設研究</a></p></div>';
     $('siteTitle').textContent = 'AHP 問卷與分析系統';
   }
-  function renderStudyBar() {
-    var bar = $('studyBar'); if (!bar) return;
-    var ids = Object.keys(studyRegistry());
-    if (studyId === 'default' && !ids.length) { bar.hidden = true; return; }
-    var h = '';
-    if (studyId !== 'default') h += '目前研究：<b>' + esc(activeConfig().studyTitle || studyId) + '</b>';
-    if (ids.length) {
-      h += (h ? '　' : '') + '切換研究：' + ids.map(function (id) {
-        var e = studyEntry(id);
-        return '<a href="?s=' + encodeURIComponent(id) + '">' + esc(e.title) + '</a>';
-      }).join('、');
-    }
-    if (studyId !== 'default') h += '　<a href="' + location.pathname + '">回預設研究</a>';
-    bar.innerHTML = h; bar.hidden = false;
-  }
   function bootStudy() {
     var q = new URLSearchParams(window.location.search || '');
     var sid = q.get('s') || '', cfgUrl = q.get('config') || '';
-    if (!sid && !cfgUrl) { renderFill(); renderStudyBar(); return; }
+    if (!sid && !cfgUrl) { renderFill(); return; }
     var entry = sid ? studyEntry(sid) : null;
     var url = cfgUrl || (entry && entry.url) || '';
     studyId = sid || ('ext-' + ((url.split('/').pop() || 'study').replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9_-]/g, '_') || 'study'));
@@ -1377,12 +1382,7 @@
       // 範本與預設值沿用 config.js 的檔案設定（後台範本按鈕、匯出用）。
       if (fileConfig().genericDimensions) studyConfig.genericDimensions = fileConfig().genericDimensions;
       if (fileConfig().presets) studyConfig.presets = fileConfig().presets;
-      renderFill(); renderStudyBar();
-      if (parsed.warnings.length) {
-        var w = parsed.warnings.map(function (x) { return x.message; }).join('；');
-        var el = $('fillIntro');
-        if (el) el.insertAdjacentHTML('beforeend', '<p class="warn small">' + esc('提醒：' + w) + '</p>');
-      }
+      renderFill();
     }).catch(function (err) {
       showStudyError('讀不到題目檔「' + url + '」（' + (err && err.message ? err.message : '網路錯誤') + '）。若檔案在 GitHub，請確認已推上 repo 且網址正確；若是外部網址，請確認該站允許跨網域讀取（CORS）。');
     });

@@ -30,7 +30,8 @@ window.AHP_CONFIG = {
   studies: {
     'special-edu': { url: 'studies/special-edu.txt', title: '特教教師資訊融入教學' },
     'smt': { url: 'studies/smt.txt', title: 'SMT 生產效率' },
-    'auto-parts': { url: 'studies/auto-parts.txt', title: '汽車零件重要客戶' }
+    'auto-parts': { url: 'studies/auto-parts.txt', title: '汽車零件重要客戶' },
+    'hitech': { url: 'studies/hitech.txt', title: 'HiTeach 國小教師關鍵因素' }
   },
   groupingRules: {},
   features: { dependency: false, scoring: false },

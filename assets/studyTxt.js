@@ -10,6 +10,8 @@
 //   [分組規則]：每行「欄位標籤：來源1，來源2 → 目標組名」。
 //     欄位標籤可用背景欄位名稱、「主要分組」，或欄位代碼（bg1、group）。
 //   [相依關係]：每行「構面名 / 基準因子：因子1，因子2」（須包含基準因子本身）。
+//   [問卷說明]：其後所有文字原樣保留為問卷開頭的說明（空行分段，
+//     寫在這裡的說明會顯示在填答頁標題下方；不寫此區段就不顯示）。
 // 回傳 { ok, config, errors: [{line, message}], warnings: [{line, message}] }。
 // config 形狀與 config.js 的單一研究設定相同，可直接取代 window.AHP_CONFIG。
 (function () {
@@ -52,11 +54,12 @@
       appsScriptUrl: '', adminCode: '',
       groupLabel: '', groupOptions: [], groupingRules: {},
       features: { dependency: false, scoring: false }, dependencies: [],
-      backgroundFields: [], dimensions: []
+      backgroundFields: [], dimensions: [], intro: ''
     };
     var lines = String(text == null ? '' : text).replace(/^\uFEFF/, '').split(/\r\n|\r|\n/);
-    var section = 'top'; // top | bg | dim | rules | dep
+    var section = 'top'; // top | bg | dim | rules | dep | intro
     var curDim = null;
+    var introLines = [];
     var seenTopKeys = {};
     var bgCount = 0;
 
@@ -79,7 +82,6 @@
     lines.forEach(function (raw, idx) {
       var ln = idx + 1;
       var line = raw.trim();
-      if (!line || line.charAt(0) === '#') return;
       var m = line.match(/^\[(.+?)\]\s*(.*)$/);
       if (m) {
         var head = m[1].trim(), rest = (m[2] || '').trim();
@@ -92,9 +94,17 @@
         }
         else if (head === '分組規則') { section = 'rules'; curDim = null; }
         else if (head === '相依關係') { section = 'dep'; curDim = null; }
-        else errors.push({ line: ln, message: '不認識的區段「[' + head + ']」，可用區段：[背景欄位]、[構面]、[分組規則]、[相依關係]。' });
+        else if (head === '問卷說明') { section = 'intro'; curDim = null; }
+        else errors.push({ line: ln, message: '不認識的區段「[' + head + ']」，可用區段：[背景欄位]、[構面]、[分組規則]、[相依關係]、[問卷說明]。' });
         return;
       }
+      // 問卷說明區：文字原樣保留，空行分段（# 開頭仍為註解行）。
+      if (section === 'intro') {
+        if (line.charAt(0) === '#') return;
+        introLines.push(raw.replace(/\s+$/, ''));
+        return;
+      }
+      if (!line || line.charAt(0) === '#') return;
 
       if (section === 'top') {
         var kv = splitKV(line);
@@ -183,6 +193,9 @@
         return;
       }
     });
+
+    // 問卷說明：空行分段，前後多餘空行去掉。
+    cfg.intro = introLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 
     // ---------- 整體驗證 ----------
     if (!cfg.studyTitle) errors.push({ line: 0, message: '缺少「研究標題」，請在檔案開頭寫「研究標題：……」。' });

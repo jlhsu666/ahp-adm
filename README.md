@@ -281,6 +281,10 @@ Apps Script 網址：https://script.google.com/macros/s/……/exec
 相依修正：關                    # 開／關
 方案評分：關                    # 開／關
 
+[問卷說明]                      # 可省略；寫了就顯示在填答頁標題下方，空行分段
+親愛的老師您好：
+首先，誠摯感謝您撥冗填寫本問卷……
+
 [背景欄位]
 性別：男, 女
 服務年資：10 年以下, 11~20 年, 21 年以上
@@ -317,6 +321,15 @@ Apps Script 網址：https://script.google.com/macros/s/……/exec
   這類允許跨網域讀取（CORS）的位址，**Google 雲端硬碟分享連結讀不到**。
 - **後台「研究設定」**：研究模式下改設定、載入範本、下載 config.js 都只影響
   目前這個研究；下載的 config.js 可把該研究部署成獨立的單一研究站。
+  後台「研究設定」也可直接改問卷說明（多行文字框），不必手改 txt。
+- **問卷說明**：題目檔的 `[問卷說明]` 區寫什麼，填答頁標題下方就顯示什麼
+  （空行分段）。不寫此區就不顯示。研究者提供的致謝信、研究目的、指導教授
+  與研究生署名都放這裡，例如 `studies/hitech.txt` 的 HiTeach 問卷說明。
+- **v3.6 介面調整**：問卷頁頂部的研究切換列已拿掉（研究連結由管理者直接發，
+  填答者看不到其他研究）；填答頁不再顯示本機模式黃框與題目檔警告
+  （本機／Sheets 狀態只在送出後的狀態文字與部署說明出現）。
+  成對比較的構面／指標名稱改為滑鼠移上去顯示定義（深色提示框，左側名稱靠左、
+  右側名稱靠右顯示）；每題下方的左／右定義保留，手機上點按名稱也可看定義。
 
 ## 十二、檔案清單
 
@@ -328,7 +341,7 @@ assets/app.js         前端邏輯（填答、後台、報告、匯入匯出、�
 assets/docx.js        瀏覽器端 .docx 產生器（Word 報告下載）
 assets/studyTxt.js    研究題目 .txt 解析器（多研究 v3.5）
 config.js             研究者部署設定（研究架構、分組、後台密碼、Sheet 網址、多研究註冊表）
-studies/              研究題目檔（.txt）：template.txt 範本、special-edu.txt、smt.txt、auto-parts.txt
+studies/              研究題目檔（.txt）：template.txt 範本、special-edu.txt、smt.txt、auto-parts.txt、hitech.txt（HiTeach，含問卷說明）
 apps-script/Code.gs   Google Apps Script 後端（貼到試算表的 Apps Script）
 README.md             本文件
 LICENSE               MIT 授權
