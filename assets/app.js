@@ -98,11 +98,11 @@
   }
   function sliderHTML(cls, attrs, values, isDep, scaleHint) {
     var mid = values.indexOf(0);
-    return '<div class="slider-row"><button type="button" class="slider-btn" data-step="-1" aria-label="往左一格">←</button>'
+    return '<div class="scale">' + scaleHint + '</div>'
+      + '<div class="slider-row"><button type="button" class="slider-btn" data-step="-1" aria-label="往左一格">←</button>'
       + '<input type="range" class="' + cls + '" ' + attrs + ' min="0" max="' + (values.length - 1) + '" step="1" value="' + mid + '" data-answered="0" data-values="' + values.join(',') + '">'
       + '<button type="button" class="slider-btn" data-step="1" aria-label="往右一格">→</button></div>'
-      + '<div class="slider-big">尚未選擇，請拖動滑桿或按左右箭頭</div>'
-      + '<div class="scale">' + scaleHint + '</div>';
+      + '<div class="slider-big">尚未選擇，請拖動滑桿或按左右箭頭</div>';
   }
   function refreshSlider(el) {
     var pair = el.closest ? el.closest('.pair') : null;
