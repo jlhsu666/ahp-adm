@@ -4,7 +4,7 @@
 研究標題：國民小學教師對資訊融入雙語教學工具之採用決策探討
 研究副標題：層級分析法（AHP）問卷
 後台密碼：123456
-Apps Script 網址：
+Apps Script 網址：https://script.google.com/macros/s/AKfycbxkYp3Eeu-SiTPD8UpkSPVXHUUOOkGJ_etYhntEFQW9TRdcu7JAmor4OYd4v5pDLua8/exec
 主要分組：任教年級
 分組選項：一年級, 二年級, 三年級, 四年級, 五年級, 六年級
 相依修正：關
